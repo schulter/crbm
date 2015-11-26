@@ -1,0 +1,88 @@
+\documentclass[12pt]{article}
+\usepackage{amssymb}
+\usepackage{amsmath}
+
+\begin{document}
+Definition of the convolutional restricted Boltzmann machine
+\begin{align}
+	E(\mathbf{v},\mathbf{h})=
+	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top W_{m+1}^k h_n^k \nonumber\\
+	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-1}^k) {h'}_n^k\nonumber\\
+	- \sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k)
+	-c^\top \sum_{n=1}^{N}v_n
+\end{align}
+The associated probability to a state $(\mathbf{v},\mathbf{h})$ is then given
+by
+\begin{align}
+	P(\mathbf{v},\mathbf{h})=\frac{e^{-E(\mathbf{v},\mathbf{h})}}
+	{\sum_{\mathbf{v}}\sum_{\mathbf{h}}e^{-E(\mathbf{v},\mathbf{h})}}
+\end{align}
+and the marginal probability of $(\mathbf{v})$
+\begin{align}
+	P(\mathbf{v})=\frac{\sum_{\mathbf{h}}e^{-E(\mathbf{v},\mathbf{h})}}
+	{\sum_{\mathbf{v}}\sum_{\mathbf{h}}e^{-E(\mathbf{v},\mathbf{h})}}
+\end{align}
+Since, we cannot perform the marginalization and the computation of the
+partition function directly, we leverage MCMC techniques in order
+to carry out inference.\par
+Computation of $P(\mathbf{h}|\mathbf{v})$ resolves in the parallel computations
+of 
+\begin{align}
+	x_n^k&:=\sum_{m=0}^{M-1}v_{n+m}^\top W_{m+1}^k + b_k\\
+	{x'}_n^k&:=\sum_{m=0}^{M-1}v_{n+m}^\top C(W_{M-m}^k) + b_k\\
+\end{align}
+For the probabilistic max-pooling, we split the range of $N-M+1$ hidden activations for
+each motif and its comlementary motif into $P=(N-M+1)/a$ distinct bins.
+Within each bin at most one hidden unit or none 
+may be turned on for a motif or its complementary motif.
+That is, for each $1\leq p\leq P$ and $1\leq i\leq a$ the probabilities
+\begin{align}
+	P(h_{a(p-1)+i}^k=1|\mathbf{v})&:=\frac{e^{x_{a(p-1)+i}^k}}{\sum_j e^{x_{a(p-1)+j}^k}+ \sum_j e^{{x'}_{a(p-1)+1+j}^k}+1}\\
+	P({h'}_{a(p-1)+i}^k=1|\mathbf{v})&:=\frac{e^{{x'}_{a(p-1)+i}^k}}{\sum_j e^{x_{a(p-1)+j}^k}+ \sum_j e^{{x'}_{a(p-1)+1+j}^k}+1}\\
+	P({h'}_{a(p-1)}^k=\mathbf{0}|\mathbf{v})&:=\frac{1}{\sum_j e^{x_{a(p-1)+j}^k}+ \sum_j e^{{x'}_{a(p-1)+j}^k}+1}
+\end{align}
+(assuming that $N-M+1$ is divisible by $a$).\par
+For the top-down pass, we determine $P(\mathbf{v}|\mathbf{h})$ according to
+\begin{align}
+	y_n:=\sum_{k=1}^K\sum_{m=0}^{M-1} W_{m+1}^k h_{n-m}^k + \sum_{k=1}^K\sum_{m=0}^{M-1} C(W_{M-m}^k) {h'}_{n-m}^k + c
+\end{align}
+and 
+\begin{align}
+	P(v_n|\mathbf{h}):=\frac{e^{y_n}}{\mathbf{1}^\top e^{y_n}}
+\end{align}
+\section{Inference}
+Inference is used to estimate $P(\mathbf{v})$ and is carried out by repeatedly sampling
+$P(\mathbf{h}|\mathbf{v})$ and $P(\mathbf{v}|\mathbf{h})$. It allows us to estimate the
+marginal distribution $P(\mathbf{v})$, the partition function $Z$ and the gradient for 
+maximum likelihood learning.
+\section{Learning}
+The gradient with respect to the likelihood is given by 
+\begin{align}
+	\nabla_{W^k} \log P(\mathbf{v}) = E_{Data}[\mathbf{v}_{[i:i+M-1]}* \mathbf{h}_{[i:i+M-1]}]-
+	E_{Model}[\mathbf{v}_{[i:i+M-1]}* \mathbf{h}_{[i:i+M-1]}]
+\end{align}
+We adjust the parameters by employing contrastive divergent approach
+\begin{align}
+	CD_{W^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i+j-1}^s p(h_{i-j+1}^s)+
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1} C(v_{i+M-j}^s) p({h'}_{i-j+1}^s)\nonumber\\
+	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i+j-1}^{rs} h_{i-j+1}^{rs}
+	-\sum_{s=1}^S \sum_{i=1}^{N-M+1} C(v_{i+M-j}^{rs}) {h'}_{i-j+1}^{rs}\nonumber\\
+\end{align}
+which can also be written as
+%\begin{align}
+%	\nabla_{W^k} \log P(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
+%	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^s* \mathbf{h}_{[i:i+M-1]}^s\nonumber\\
+%	&+\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^s)* \mathbf{h'}_{[i:i+M-1]}^s\nonumber\\
+%	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^{rs}* \mathbf{h}_{[i:i+M-1]}^{rs}\nonumber\\
+%	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^{rs})* \mathbf{h'}_{[i:i+M-1]}^{rs}\nonumber
+%\end{align}
+\begin{align}
+	CD_{W^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^s* p(\mathbf{h}_{[i:i+M-1]}^s)\nonumber\\
+	&+\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^s)* p(\mathbf{h'}_{[i:i+M-1]}^s)\nonumber\\
+	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^{rs}* \mathbf{h}_{[i:i+M-1]}^{rs}\nonumber\\
+	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^{rs})* \mathbf{h'}_{[i:i+M-1]}^{rs}\nonumber
+\end{align}
+
+\end{document}
