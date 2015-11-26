@@ -7,7 +7,7 @@ Definition of the convolutional restricted Boltzmann machine
 \begin{align}
 	E(\mathbf{v},\mathbf{h}, \mathbf{h}')=
 	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top W_{m+1}^k h_n^k \nonumber\\
-	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-1}^k) {h'}_n^k\nonumber\\
+	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-m}^k) {h'}_n^k\nonumber\\
 	- \sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k)
 	-c^\top \sum_{n=1}^{N}v_n
 \end{align}
