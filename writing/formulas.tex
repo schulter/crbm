@@ -68,23 +68,39 @@ $P(\mathbf{h}|\mathbf{v})$ and $P(\mathbf{v}|\mathbf{h})$. It allows us to estim
 marginal distribution $P(\mathbf{v})$, the partition function $Z$ and the gradient for 
 maximum likelihood learning.
 \section{Learning}
-The gradient with respect to the likelihood is given by 
+%The gradient with respect to the likelihood
+%\begin{align}
+%	\nabla_{W^k} \log P(\mathbf{v}) 
+%\end{align}
+We adjust the parameters by employing a practical
+short-cut with respect to ordinary maximum likelihood learning,
+referred to as contrastive divergent which is given by
 \begin{align}
-	\nabla_{W^k} \log P(\mathbf{v}) = E_{Data}[\mathbf{v}_{[i:i+M-1]}* \mathbf{h}_{[i:i+M-1]}]-
-	E_{Model}[\mathbf{v}_{[i:i+M-1]}* \mathbf{h}_{[i:i+M-1]}]
-\end{align}
-However, we adjust the parameters by employing a more practical
-short-cut, referred to as contrastive divergent which is given by
-\begin{align}
-	CD_{W^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
-	\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i+j-1}^s p(h_{i-j+1}^s)+
-	\sum_{s=1}^S \sum_{i=1}^{N-M+1} C(v_{i+M-j}^s) p({h'}_{i-j+1}^s)\nonumber\\
-	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i+j-1}^{rs} h_{i-j+1}^{rs}
-	-\sum_{s=1}^S \sum_{i=1}^{N-M+1} C(v_{i+M-j}^{rs}) {h'}_{i-j+1}^{rs}\nonumber\\
+	CD_{W_j^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i}^s p(h_{i-j+1}^{sk}|\mathbf{v})+
+	 C(v_{i+M-j}^s) p({h'}_{i}^{sk}|\mathbf{v})\nonumber\\
+	 &- \sum_{s=1}^S \sum_{i=1}^{N-M+1}v_{i}^{rs} h_{i-j+1}^{rsk}
+	 +C(v_{i+M-j}^{rs}) {h'}_{i}^{rsk}\label{cd1w}\\
+	CD_{b_k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1} p(h_{i}^{k}|\mathbf{v})+
+	p({h'}_{i}^{k}|\mathbf{v})
+	- h_{i}^{rsk}
+	- {h'}_{i}^{rsk}\label{cd1b}\\
+	CD_{c}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
+	\sum_{s=1}^S \sum_{i=1}^{N} v_{i}^s 
+	- v_{i}^{rs}
 \end{align}
 The superscript $r$ for $v^r$ and $h^r$ in the negative phase denote the
 reconstructions after aquiring one or more bottom-up /top-down samples.
-The contrastive divergence direction can also be written as
+Recall the definition of the cross-correlation function which is defined as
+\begin{align}
+ R_{fg}(x)&=\int_{-\infty}^\infty f(u+x)g(u)du\\
+ &=\int_{-\infty}^\infty f(u)g(u-x)du\\
+ &=(f\star g)(x)
+\end{align}
+which is similar to the convolution operation
+The contrastive divergence in Equation \ref{cd1w} makes 
+use of the cross-correlation operation.
 %\begin{align}
 %	\nabla_{W^k} \log P(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
 %	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^s* \mathbf{h}_{[i:i+M-1]}^s\nonumber\\
@@ -92,12 +108,12 @@ The contrastive divergence direction can also be written as
 %	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^{rs}* \mathbf{h}_{[i:i+M-1]}^{rs}\nonumber\\
 %	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^{rs})* \mathbf{h'}_{[i:i+M-1]}^{rs}\nonumber
 %\end{align}
-\begin{align}
-	CD_{W^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
-	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^s* p(\mathbf{h}_{[i:i+M-1]}^s)\nonumber\\
-	&+\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^s)* p(\mathbf{h'}_{[i:i+M-1]}^s)\nonumber\\
-	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^{rs}* \mathbf{h}_{[i:i+M-1]}^{rs}\nonumber\\
-	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{[i+M-1:i]}^{rs})* \mathbf{h'}_{[i:i+M-1]}^{rs}\nonumber
-\end{align}
-
+%\begin{align}
+%	CD_{W^k_j}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
+%	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{i}^s* p(h_{i-j+1}^s|\mathbf{v})\nonumber\\
+%	&+\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{i-j+1}^s)* p({h'}_{i}^s|\mathbf {v})\nonumber\\
+%	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{i}^{rs}* h_{i-j+1}^{rs}\nonumber\\
+%	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{i-j+1}^{rs})* {h'}_{i}^{rs}
+%\end{align}
+%We use zero-padding $h_i$ where $i<1$ and $i>N-M+1$.
 \end{document}
