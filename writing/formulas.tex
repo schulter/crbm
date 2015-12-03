@@ -77,18 +77,18 @@ short-cut with respect to ordinary maximum likelihood learning,
 referred to as contrastive divergent which is given by
 \begin{align}
 	CD_{W_j^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
-	\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i}^s p(h_{i-j+1}^{sk}|\mathbf{v})+
-	 C(v_{i+M-j}^s) p({h'}_{i}^{sk}|\mathbf{v})\nonumber\\
-	 &- \sum_{s=1}^S \sum_{i=1}^{N-M+1}v_{i}^{rs} h_{i-j+1}^{rsk}
-	 +C(v_{i+M-j}^{rs}) {h'}_{i}^{rsk}\label{cd1w}\\
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i}^s p(h_{i-j+1}^{sk}|\mathbf{v}^s)+
+	 C(v_{i+M-j}^s) p({h'}_{i}^{sk}|\mathbf{v}^s)\nonumber\\
+	 &- \sum_{s=1}^S \sum_{i=1}^{N-M+1}v_{i}^{rs} p(h_{i-j+1}^{rsk}|\mathbf{v}^{rs})
+	 +C(v_{i+M-j}^{rs}) p({h'}_{i}^{rsk}|\mathbf{v}^{rs})\label{cd1w}\\
 	CD_{b_k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
-	\sum_{s=1}^S \sum_{i=1}^{N-M+1} p(h_{i}^{k}|\mathbf{v})+
-	p({h'}_{i}^{k}|\mathbf{v})
-	- h_{i}^{rsk}
-	- {h'}_{i}^{rsk}\label{cd1b}\\
+	\sum_{s=1}^S \sum_{i=1}^{N-M+1} p(h_{i}^{k}|\mathbf{v}^s)+
+	p({h'}_{i}^{k}|\mathbf{v}^s)
+	- p(h_{i}^{rsk}|\mathbf{v}^{rs})
+	- p({h'}_{i}^{rsk}|\mathbf{v}^{rs})\label{cd1b}\\
 	CD_{c}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
 	\sum_{s=1}^S \sum_{i=1}^{N} v_{i}^s 
-	- v_{i}^{rs}
+	- p(v_{i}^{rs}|\mathbf{h}^{rs})
 \end{align}
 The superscript $r$ for $v^r$ and $h^r$ in the negative phase denote the
 reconstructions after aquiring one or more bottom-up /top-down samples.
@@ -101,6 +101,48 @@ Recall the definition of the cross-correlation function which is defined as
 which is similar to the convolution operation
 The contrastive divergence in Equation \ref{cd1w} makes 
 use of the cross-correlation operation.
+\section{Persistent contrastive divergence}
+In the ordinary form of contrastive divergence, the negative phase is
+determined by running the block Gibbs sampling for $k$ steps, each time
+starting from an observed data-point $\mathbf{v}^s$. 
+In contrast to that, persistent contrastive divergence uses runs
+block Gibbs sampling starting from  the previously stored state, which
+should be closer to the stationary state of the Markov chain, 
+and hence lead to better estimates.
+This is also what Hinton refers to as using persitent "fantasy particles".
+\section{Monitoring of the average Free energy}
+We can monitor the learning progress and prevent overfitting by comparing 
+the average Free energy on the training and test set. In the beginning of 
+the learning phase, in either set, the free energy should decrease.
+Upon overfitting, the Free energy on the test set starts to increase again,
+while it still decreases on the training set.
+The advantage of this approach is, that we do not have to deal with 
+the partition function, which simply cancels out.
+The Free energy for our setting is defined as
+\begin{align}
+	F(\mathbf{v})&=&-\log \sum_{\mathbf{h},\mathbf{h}'}e^{-E(\mathbf{v},\mathbf{h},\mathbf{h}')}\\
+	&=&-\log\sum_{\mathbf{h},\mathbf{h}'} 
+	exp(
+	\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top W_{m+1}^k h_n^k \nonumber\\
+	&&+\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-m}^k) {h'}_n^k\nonumber\\
+	&& +\sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k)
+	+c^\top \sum_{n=1}^{N}v_n )\\
+	%&=&-c^\top\sum_{n=1}^{N}v_n -\log\sum_{\mathbf{h},\mathbf{h}'} 
+	%exp(
+	%\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top W_{m+1}^k h_n^k \nonumber\\
+	%&&+\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-m}^k) {h'}_n^k\nonumber\\
+	%&& +\sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k))\\
+	&=&-c^\top\sum_{n=1}^{N}v_n \nonumber\\
+	&&-\sum_{k=1}^K\sum_{p=0}^{P-1}\log(
+	1+\sum_{m=0}^{M-1}\sum_{i=1}^a e^{b_k + v^\top_{a\cdot p+i+m}W^k_{m+1}}\nonumber\\
+	&&+\sum_{m=0}^{M-1}\sum_{i=1}^a e^{b_k + v^\top_{a\cdot p+i+m}C(W^k_{M-m})})\\
+	%&&exp(
+	%\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top W_{m+1}^k h_n^k \nonumber\\
+	%&&+\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-m}^k) {h'}_n^k\nonumber\\
+	%&& +\sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k))
+\end{align}
+\section{Estimation of the partition function}
+Maybe later
 %\begin{align}
 %	\nabla_{W^k} \log P(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
 %	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^s* \mathbf{h}_{[i:i+M-1]}^s\nonumber\\
