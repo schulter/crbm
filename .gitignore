@@ -1,0 +1,5 @@
+# exclude python temporary files
+*.py~
+
+# exclude images and plots
+*.png
