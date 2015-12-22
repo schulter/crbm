@@ -1,5 +1,8 @@
 # exclude python temporary files
-*.py~
+*~
 
 # exclude images and plots
 *.png
+
+# ipython specific files
+.ipynb_checkpoints/
