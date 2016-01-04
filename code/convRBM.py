@@ -12,6 +12,8 @@ import time
 
 from utils import max_pool
 
+## PART 3: Optimizing theano to do it all on the GPU
+
 """
 This is the actual implementation of our convolutional RBM.
 The class implements only contrastive divergence learning so far
@@ -127,33 +129,24 @@ class CRBM:
         res = self.softmax(out)
         return res
 
-    
+        
     def makeDerivativesStrandCompliant (self, derivatives):
-        # scan over the even kernels and sum them together with the next
-        # one (k[0] + k[1] etc)
-        def sumWithNext(idx, output_model):
-            sub1 = output_model[:,idx,:,:]
-            sub2 = output_model[:,idx+1,:,:]
-            added = sub1 + sub2
-            out = T.set_subtensor(sub1, added)
-            return out
-        result, updates = theano.scan(fn=sumWithNext,
-                                      outputs_info=derivatives,
-                                      sequences=[T.arange(start=0, stop=2*self.numMotifs, step=2)])
-        result = result[-1] # only take the last one
+        # reshape such that even kernels form one matrix, while the uneven form the other
+        N_batch, K, letters, length = derivatives.shape
+        D_reshaped = derivatives.reshape((N_batch, K//2, 2, letters, length))
         
-        # now scan over the unevens and set their derivative to the reverse complement
-        # of the evens
-        def setToReverseComplement(idx, output_model):
-            sub1 = output_model[:,idx,:,:]
-            revCom = output_model[:,idx-1,:,:]
-            revCom = revCom[:,::-1,::-1]
-            return T.set_subtensor(sub1, revCom)
-        result, updates = theano.scan(fn=setToReverseComplement,
-                                      outputs_info=result,
-                                      sequences=[T.arange(start=1, stop=2*self.numMotifs, step=2)])
+        # sum together the even and uneven ones and construct the reverse thing
+        D_summed = D_reshaped[:,:,0,:,:] + D_reshaped[:,:,1,:,:]
+        D_summed_reverse = D_summed[:,:,::-1,::-1] # just invert cols and rows of kernel
         
-        return result[-1]
+        # melt it all back together by first adding yet another dimension
+        D_restored = T.stack(D_summed, D_summed_reverse)
+        p = theano.printing.Print('D_restored_shape')(D_restored.shape)
+        D_result = D_restored.dimshuffle(1, 2, 0, 3, 4).reshape((N_batch, K, letters, length))
+        
+        if self.debug:
+            D_result = theano.printing.Print('Derivatives strand compliant')(D_result)
+        return D_result
         
 
     def expectedDerivative (self, hiddenProbs, data):
@@ -162,8 +155,8 @@ class CRBM:
         # TODO: Capture the 1 <-> 1 relation between samples in H and D
         # Currently, this is done by mean (1st row) but that's not good at all
         out = conv.conv2d(data, H_reshaped)
-        # TODO: perform scan here and sum even ones while setting unevens to 0.
-        # TODO: Don't mean over all then, but use sum and divide by K (not 2*K like in this case)
+        
+        # make the kernels respect the strand structure
         out = self.makeDerivativesStrandCompliant(out)
         
         der_Motifs = T.sum(out, axis=0, keepdims=True) / self.numMotifs # mean over training examples
@@ -237,20 +230,21 @@ class CRBM:
               },
               name='train_CRBM'
         )
-
-        reconFun = self.getFreeEnergyFunction()
+        scoringFunctions = [self.getFreeEnergyFunction(), self.getReconFun()]
         print "Compilation of theano function finished in " + str(time.time()-start) + " seconds"
         print "Start training..."
         start = time.time()
-        allScores = []
-        allScores.append(reconFun(testData))
-        print "Initial Reconstruction Error: " + str(allScores[-1])
+        allScores = [[] for i in scoringFunctions]
+        [allScores[i].append(scoringFunctions[i](testData)) for i in range(len(scoringFunctions))]
+        print "Initial Error: " + [str(allScores[i][0]) for i in range(len(allScores))]
+        for i in range(len(allScores)):
+            print allScores[i][0]
         for epoch in range(epochs):
             smallScores = []
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
-            allScores.append(reconFun(testData))
-            print "[Epoch " + str(epoch) + "] Reconstruction Error: " + str(allScores[-1])
+            [allScores[i].append(scoringFunctions[i](testData)) for i in range(len(scoringFunctions))]
+            print "[Epoch " + str(epoch) + "] Error: " + str([i[-1] for i in allScores])
         print "Training finished after: " + str(time.time()-start) + " seconds!"
         return allScores
 
@@ -266,7 +260,7 @@ class CRBM:
         S_V = self.sampleVisibleLayer(V)
         sames = S_V * D # elements are 1 if they have the same letter...
         count = T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
-        return score
+        return count
     
  
     def getFreeEnergyFunction (self):
