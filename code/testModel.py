@@ -32,7 +32,8 @@ scores = learner.trainMinibatch(trainingData, testingData, 100, 50, 1)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
-file_name = datetime.strftime("trainedModel_%y_%m_%d_%H_%M.pkl")
+file_name = datetime.now().strftime("trainedModel_%Y_%m_%d_%H_%M.pkl")
+
 with open('models/' + file_name, 'w') as f:
 	cPickle.dump(learner, f)
 	
@@ -41,4 +42,4 @@ for i in range(len(scores)):
     plt.xlabel('Number Of Epoch')
     plt.title('Small dataset on real data')
     plt.plot(scores[i])
-    plt.show()
+    plt.savefig('test_' + str(i) + ".png")
