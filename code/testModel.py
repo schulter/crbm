@@ -46,9 +46,9 @@ learner.trainMinibatch(trainingData, testingData, 10, 50, 5)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
-file_name = datetime.now().strftime("trainedModel_%Y_%m_%d_%H_%M.pkl")
-with open('models/' + file_name, 'w') as f:
-	cPickle.dump(learner, f)
+file_name = datetime.now().strftime("models/trainedModel_%Y_%m_%d_%H_%M.pkl")
+print file_name
+learner.saveModel(file_name)
 
 plt.subplot(2,1,1)
 plt.ylabel('Free energy function')
