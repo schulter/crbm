@@ -60,6 +60,7 @@ class CRBM:
         self.theano_rng = RS(seed=1234)
         self.params = [self.motifs, self.bias, self.c]
         self.debug = False
+        self.observers = []
     
     
     def initializeMotifs (self):
@@ -95,8 +96,10 @@ class CRBM:
         self.motifs = theano.shared(value=customKernels.astype(np.float32))
         self.params = [self.motifs, self.bias, self.c]
         print "New motifs set. # Motifs: " + str(self.numMotifs) + " K-mer-Length: " + str(self.motifLength)
-
         
+    def addObserver (self, _observer):
+		self.observers.append(_observer)
+		
 ### ------------------------------THE TOUGH STUFF-------------------------------- ###
 ### ----------------------------------------------------------------------------- ###
 
@@ -195,7 +198,6 @@ class CRBM:
         new_bias = self.bias + self.learningRate * (G_bias_data - G_bias_model)
         new_c = self.c + self.learningRate * (G_c_data - G_c_model)
         
-        #score = self.getDataReconstruction(D)
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c)]
 
         return updates
@@ -214,9 +216,8 @@ class CRBM:
         start = time.time()
         
         # compile training function
-        
+        print "Start compiling Theano training function..."
         train_set = theano.shared(value=trainData, borrow=True, name='trainData')
-        
         index = T.lscalar()
         D = T.tensor4('data')
         updates = self.train_model(D, numOfCDs)
@@ -230,23 +231,21 @@ class CRBM:
               },
               name='train_CRBM'
         )
-        scoringFunctions = [self.getFreeEnergyFunction(), self.getReconFun()]
-        print "Compilation of theano function finished in " + str(time.time()-start) + " seconds"
-        print "Start training..."
+        print "Compilation of Theano training function finished in " + str(time.time()-start) + " seconds"
+        
+        # now perform training
+        print "Start training the model..."
         start = time.time()
-        allScores = [[] for i in scoringFunctions]
-        [allScores[i].append(scoringFunctions[i](testData)) for i in range(len(scoringFunctions))]
-        print "Initial Error: " + [str(allScores[i][0]) for i in range(len(allScores))]
-        for i in range(len(allScores)):
-            print allScores[i][0]
+
         for epoch in range(epochs):
-            smallScores = []
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
-            [allScores[i].append(scoringFunctions[i](testData)) for i in range(len(scoringFunctions))]
-            print "[Epoch " + str(epoch) + "] Error: " + str([i[-1] for i in allScores])
+            for obs in self.observers:
+				print "Score of function: " + str(obs.calculateScore())
+            print "[Epoch " + str(epoch) + "] done!"
+        
+        # done with training
         print "Training finished after: " + str(time.time()-start) + " seconds!"
-        return allScores
 
     def getReconFun (self):
         D = T.tensor4('data')
