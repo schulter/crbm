@@ -81,9 +81,15 @@ class ReconstructionErrorObserver (TrainingObserver):
 		sumOfScores = 0
 		for batchIdx in xrange(iterations):
 			sumOfScores += self.scoringFunction(batchIdx)
-		score = sumOfScores / iterations # mean
-		self.scores.append(score)
-		return score
+		count = sumOfScores / iterations # mean
+		
+		# got the count of correct letters for all seqs
+		# now, make it percentage of sequence (prob. to get all correct)
+		count /= self.data.shape[3]
+		error = 1 - count # how much error do we have
+		
+		self.scores.append(error)
+		return error
 		
 	
 	def getScoringFunction(self):
