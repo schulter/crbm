@@ -15,8 +15,8 @@ import cPickle
 seqReader = dataRead.FASTAReader()
 allSeqs = seqReader.readSequencesFromFile('../data/wgEncodeAwgDnaseUwAg10803UniPk.fa')
 
-data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(20000)]
-#data = allSeqs
+#data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(20000)]
+data = allSeqs
 train_set, test_set = train_test_split(data, test_size=0.1)
 print "Training set size: " + str(len(train_set))
 print "Test set size: " + str(len(test_set))
@@ -26,7 +26,7 @@ trainingData = np.array([dataRead.getMatrixFromSeq(t) for t in train_set])
 testingData = np.array([dataRead.getMatrixFromSeq(t) for t in test_set])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
-learner = CRBM(9, 20, 0.001, 2)
+learner = CRBM(5, 10, 0.0001, 2)
 
 # add the observers for free energy (test and train)
 free_energy_observer = observer.FreeEnergyObserver(learner, testingData)
@@ -42,12 +42,12 @@ learner.addObserver(reconstruction_observer_train)
 
 print "Data mat shape: " + str(trainingData.shape)
 start = time.time()
-learner.trainMinibatch(trainingData, testingData, 10, 50, 5)
+learner.trainMinibatch(trainingData, testingData, 1000, 50, 1)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
 file_name = datetime.now().strftime("models/trainedModel_%Y_%m_%d_%H_%M.pkl")
-print file_name
+print "Saving model to " + str(file_name)
 learner.saveModel(file_name)
 
 plt.subplot(2,1,1)
@@ -63,4 +63,4 @@ plt.xlabel('Number Of Epoch')
 plt.title('Reconstruction Error')
 plt.plot(reconstruction_observer.scores)
 
-plt.savefig('longRun_1000epo_9kmers_cd5.png')
+plt.savefig('longRun_1000epo_9kmers_30motifs_cd5.png')
