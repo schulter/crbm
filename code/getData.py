@@ -22,7 +22,7 @@ def getIntToLetter (letter):
         return -1
 
 
-def getMatrixFromSeq (seq):
+def getOneHotMatrixFromSeq (seq):
     m = len(seq.alphabet.letters)
     n = len(seq)
     result = np.zeros((1, m, n), dtype=np.float32)
@@ -31,28 +31,32 @@ def getMatrixFromSeq (seq):
         result[0,getIntToLetter(seq[i]),i] = 1
     return result
 
-
-
 """
 This class reads sequences from fasta files.
 To use it, create an instance of that object and use
 the function readSequencesFromFile.
 """
 class FASTAReader:
-    
-
     def readSequencesFromFile (self, filename):
         dhsSequences = []
         for dhs in sio.parse(open(filename), 'fasta', IUPAC.unambiguous_dna):
             dhsSequences.append(dhs.seq)
         return dhsSequences
-		
-	def readSequencesAsMatrices (self, filename):
-		dhsSequences = []
-		for dhs in sio.parse(open(filename), 'fasta', IUPAC.unambiguous_dna):
-			dhsSequences.append(getMatrixFromSeq(dhs.seq))
+    
+    def readSequencesAsOneHotMatrices (self, filename):
+        dhsSequences = []
+        for dhs in sio.parse(open(filename), 'fasta', IUPAC.unambiguous_dna):
+            dhsSequences.append(getOneHotMatrixFromSeq(dhs.seq))
+        return dhsSequences
+
+    def readSequencesAsLetterMatrix (self, filename):
+        seqs = self.readSequencesAsOneHotMatrices(filename)
+        seqsInt = [np.argmax(sequence, axis=1) for sequence in seqs]
+        return seqsInt
     
     
+    
+
 class JASPARReader:
     
 
