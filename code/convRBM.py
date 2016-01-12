@@ -131,7 +131,7 @@ class CRBM:
 
     def forwardBatch (self, data):
         # calculate filter(D, W) + b
-        out = conv.conv2d(data, self.motifs[:,:,::-1,::-1])
+        out = conv.conv2d(data, self.motifs[:,:,::-1,::-1]) # cross-correlation
         if self.debug:
             out = theano.printing.Print('Convolution result forward: ')(out)
         bMod = self.bias
@@ -149,8 +149,8 @@ class CRBM:
 
 
     def backwardBatch (self, H_sample):
-        # dimshuffle the motifs to have 
-        W = self.motifs.dimshuffle(1, 0, 2, 3)[:,:,::-1,::-1] # kernel is flipped prior to convolution
+        # dimshuffle the motifs to have K as channels (will be summed automatically)
+        W = self.motifs.dimshuffle(1, 0, 2, 3)[:,:,::-1,:] # needs that due to miraculous reasons
         C = conv.conv2d(H_sample, W, border_mode='full')[:,:,::-1,:]
         if self.debug:
             C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
@@ -189,9 +189,9 @@ class CRBM:
         result = T.zeros((N_batch, 2*self.numMotifs, 4, self.motifLength))
         
         for seq in range(self.batchSize):
-            d_i = data[seq,:,:,:].dimshuffle('x',0,1,2)
-            h_i = hiddenProbs[seq,:,:,:].dimshuffle(0,'x',1,2)
-            subT_result = result[seq,:,:,:]
+            d_i = data[seq].dimshuffle('x',0,1,2)
+            h_i = hiddenProbs[seq].dimshuffle(0,'x',1,2)[:,:,::-1,::-1]
+            subT_result = result[seq]
             localResult = conv.conv2d(d_i, h_i).sum(axis=0)
             result = T.set_subtensor(subT_result, localResult)
 
