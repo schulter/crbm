@@ -22,8 +22,8 @@ print "Training set size: " + str(len(train_set))
 print "Test set size: " + str(len(test_set))
 
 start = time.time()
-trainingData = np.array([dataRead.getMatrixFromSeq(t) for t in train_set])
-testingData = np.array([dataRead.getMatrixFromSeq(t) for t in test_set])
+trainingData = np.array([dataRead.getOneHotMatrixFromSeq(t) for t in train_set])
+testingData = np.array([dataRead.getOneHotMatrixFromSeq(t) for t in test_set])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
 learner = CRBM(7, 20, 0.0001, 2)
