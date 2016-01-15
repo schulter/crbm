@@ -62,5 +62,6 @@ plt.ylabel('Reconstruction error on dataset')
 plt.xlabel('Number Of Epoch')
 plt.title('Reconstruction Error')
 plt.plot(reconstruction_observer.scores)
+plt.plot(reconstruction_observer_train.scores)
 
 plt.savefig('longRun_1000epo_9kmers_30motifs_cd5_new_crossCor.png')

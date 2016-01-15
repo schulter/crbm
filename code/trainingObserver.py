@@ -6,9 +6,10 @@ import theano.tensor.nnet.conv as conv
 
 class TrainingObserver:
 	
-	def __init__ (self, _model, _data):
+	def __init__ (self, _model, _data, _name):
 		self.model = _model
 		self.data = _data
+		self.name = _name
 		self.batchSize = 1000
 		self.scores = []
 		self.scoringFunction = self.getScoringFunction()
@@ -22,8 +23,8 @@ class TrainingObserver:
 
 class FreeEnergyObserver (TrainingObserver):
 	
-	def __init__ (self, _model, _data):
-		TrainingObserver.__init__(self, _model, _data)
+	def __init__ (self, _model, _data, _name="Free Energy Observer"):
+		TrainingObserver.__init__(self, _model, _data, _name)
 
 	def calculateScore (self):
 		iterations = self.data.shape[0] / self.batchSize
@@ -72,8 +73,8 @@ class FreeEnergyObserver (TrainingObserver):
 
 class ReconstructionErrorObserver (TrainingObserver):
 	
-	def __init__(self, _model, _data):
-		TrainingObserver.__init__(self, _model, _data)
+	def __init__(self, _model, _data, _name="Reconstruction Error Observer"):
+		TrainingObserver.__init__(self, _model, _data, _name)
 		
 		
 	def calculateScore (self):

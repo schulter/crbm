@@ -283,7 +283,8 @@ class CRBM:
         # now perform training
         print "Start training the model..."
         start = time.time()
-
+        for obs in self.observers:
+			print "Initial Score of observer: " + str(obs.calculateScore())
         for epoch in range(epochs):
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
