@@ -43,10 +43,10 @@ class CRBM:
                      mod(sequenceLength-motifLength+1, poolingFactor) == 0
                      (1 = equivalent to sigmoid activation)
     """
-    def __init__ (self, _motifLength, _numMotifs, _learningRate=0.1, _poolingFactor=1):
+    def __init__ (self, motifLength=5, numberOfMotifs=20, learningRate=0.1, poolingFactor=1):
         # parameters for the motifs
-        self.motifLength = _motifLength
-        self.numMotifs = _numMotifs
+        self.motifLength = motifLength
+        self.numMotifs = numberOfMotifs
         self.initializeMotifs()
         
         # cRBM parameters (2*x to respect both strands of the DNA)
@@ -54,8 +54,8 @@ class CRBM:
         c = np.random.rand(1, 4).astype(np.float32)
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
-        self.poolingFactor = _poolingFactor
-        self.learningRate = _learningRate
+        self.poolingFactor = poolingFactor
+        self.learningRate = learningRate
         
         # infrastructural parameters
         self.theano_rng = RS(seed=1234)
@@ -250,11 +250,10 @@ class CRBM:
         return updates
     
     
-    def trainMinibatch (self, trainData, testData, epochs, batchSize, numOfCDs):
+    def trainMinibatch (self, trainData, epochs, batchSize, numOfCDs):
 
         # assert that pooling can be done without rest to the division
         assert (((trainData.shape[3] - self.motifLength + 1) % self.poolingFactor) == 0)
-        assert (((testData.shape[3] - self.motifLength + 1) % self.poolingFactor) == 0)
 
         self.batchSize = batchSize
         # some debug printing

@@ -17,7 +17,7 @@ allSeqs = seqReader.readSequencesFromFile('../data/wgEncodeAwgDnaseUwAg10803UniP
 
 #data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(20000)]
 data = allSeqs
-train_set, test_set = train_test_split(data, test_size=0.1)
+train_set, test_set = train_test_split(data, test_size=0.01)
 print "Training set size: " + str(len(train_set))
 print "Test set size: " + str(len(test_set))
 
@@ -26,7 +26,7 @@ trainingData = np.array([dataRead.getMatrixFromSeq(t) for t in train_set])
 testingData = np.array([dataRead.getMatrixFromSeq(t) for t in test_set])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
-learner = CRBM(5, 10, 0.0001, 2)
+learner = CRBM(7, 20, 0.0001, 2)
 
 # add the observers for free energy (test and train)
 free_energy_observer = observer.FreeEnergyObserver(learner, testingData)
@@ -42,7 +42,7 @@ learner.addObserver(reconstruction_observer_train)
 
 print "Data mat shape: " + str(trainingData.shape)
 start = time.time()
-learner.trainMinibatch(trainingData, testingData, 1000, 50, 1)
+learner.trainMinibatch(trainingData, 10, 50, 1)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
@@ -63,4 +63,4 @@ plt.xlabel('Number Of Epoch')
 plt.title('Reconstruction Error')
 plt.plot(reconstruction_observer.scores)
 
-plt.savefig('longRun_1000epo_9kmers_30motifs_cd5.png')
+plt.savefig('longRun_1000epo_9kmers_30motifs_cd5_new_crossCor.png')
