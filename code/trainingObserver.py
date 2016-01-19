@@ -25,6 +25,13 @@ class FreeEnergyObserver (TrainingObserver):
 	
 	def __init__ (self, _model, _data, _name="Free Energy Observer"):
 		TrainingObserver.__init__(self, _model, _data, _name)
+		
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['data']
+		del state['model']
+		return state
 
 	def calculateScore (self):
 		iterations = self.data.shape[0] / self.batchSize
@@ -76,7 +83,13 @@ class ReconstructionErrorObserver (TrainingObserver):
 	def __init__(self, _model, _data, _name="Reconstruction Error Observer"):
 		TrainingObserver.__init__(self, _model, _data, _name)
 		
-		
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['data']
+		del state['model']
+		return state
+
 	def calculateScore (self):
 		iterations = self.data.shape[0] / self.batchSize
 		sumOfScores = 0
@@ -121,7 +134,14 @@ class MotifObserver (TrainingObserver):
 	
 	def __init__(self, _model, _data, _name="Motif Error Observer"):
 		TrainingObserver.__init__(self, _model, _data, _name)
-		
+	
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['data']
+		del state['model']
+		return state
+
 	def calculateScore (self):
 		self.scores.append(self.model.motifs.get_value())
 		
