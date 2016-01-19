@@ -10,7 +10,7 @@ class TrainingObserver:
 		self.model = _model
 		self.data = _data
 		self.name = _name
-		self.batchSize = 1000
+		self.batchSize = 50
 		self.scores = []
 		self.scoringFunction = self.getScoringFunction()
 		
@@ -115,3 +115,15 @@ class ReconstructionErrorObserver (TrainingObserver):
 		sames = S_V * D # elements are 1 if they have the same letter...
 		count = T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
 		return count
+
+
+class MotifObserver (TrainingObserver):
+	
+	def __init__(self, _model, _data, _name="Motif Error Observer"):
+		TrainingObserver.__init__(self, _model, _data, _name)
+		
+	def calculateScore (self):
+		self.scores.append(self.model.motifs.get_value())
+		
+	def getScoringFunction (self):
+		return np.sum # it's a stub

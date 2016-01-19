@@ -15,8 +15,8 @@ import cPickle
 seqReader = dataRead.FASTAReader()
 allSeqs = seqReader.readSequencesFromFile('../data/wgEncodeAwgDnaseUwAg10803UniPk.fa')
 
-#data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(20000)]
-data = allSeqs
+data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(20000)]
+#data = allSeqs
 train_set, test_set = train_test_split(data, test_size=0.01)
 print "Training set size: " + str(len(train_set))
 print "Test set size: " + str(len(test_set))
@@ -26,27 +26,36 @@ trainingData = np.array([dataRead.getOneHotMatrixFromSeq(t) for t in train_set])
 testingData = np.array([dataRead.getOneHotMatrixFromSeq(t) for t in test_set])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
-learner = CRBM(7, 20, 0.0001, 2)
+learner = CRBM(7, 10, 0.0001, 2)
 
 # add the observers for free energy (test and train)
-free_energy_observer = observer.FreeEnergyObserver(learner, testingData)
+free_energy_observer = observer.FreeEnergyObserver(learner, testingData, "Free Energy Testing Observer")
 learner.addObserver(free_energy_observer)
-free_energy_train_observer = observer.FreeEnergyObserver(learner, trainingData)
-learner.addObserver(free_energy_train_observer)
+free_energy_train_observer = observer.FreeEnergyObserver(learner, trainingData, "Free Energy Training Observer")
+#learner.addObserver(free_energy_train_observer)
 
 # add the observers for reconstruction error (test and train)
-reconstruction_observer = observer.ReconstructionErrorObserver(learner, testingData)
+reconstruction_observer = observer.ReconstructionErrorObserver(learner, testingData, "Reconstruction Error Testing Observer")
 learner.addObserver(reconstruction_observer)
-reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, trainingData)
-learner.addObserver(reconstruction_observer_train)
+reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, trainingData, "Reconstruction Error Training Observer")
+#learner.addObserver(reconstruction_observer_train)
+
+# add the observer of the motifs during training (to look at them afterwards)
+motif_observer = observer.MotifObserver(learner, trainingData)
+learner.addObserver(motif_observer)
 
 print "Data mat shape: " + str(trainingData.shape)
+
+# set PARAMETERS FOR EPOCHS AND CD
+epochs = 2
+cd_k = 1
+
 start = time.time()
-learner.trainMinibatch(trainingData, 10, 50, 1)
+learner.trainMinibatch(trainingData, epochs, 50, cd_k)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
-file_name = datetime.now().strftime("models/trainedModel_%Y_%m_%d_%H_%M.pkl")
+file_name = datetime.now().strftime("../../models/trainedModel_%Y_%m_%d_%H_%M.pkl")
 print "Saving model to " + str(file_name)
 learner.saveModel(file_name)
 
@@ -64,4 +73,6 @@ plt.title('Reconstruction Error')
 plt.plot(reconstruction_observer.scores)
 plt.plot(reconstruction_observer_train.scores)
 
-plt.savefig('longRun_1000epo_9kmers_30motifs_cd5_new_crossCor.png')
+# save plot to file
+file_name_plot = "training_" + str(epochs) + "epo_" + str(learner.motifLength) + "kmers_" + str(learner.numMotifs) + "motifs_CD"+str(cd_k)+".png"
+plt.savefig(file_name_plot)

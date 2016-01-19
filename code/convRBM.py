@@ -1,3 +1,6 @@
+# SNAIL
+
+
 # Theano imports
 import theano
 import theano.tensor as T
@@ -15,6 +18,7 @@ from utils import max_pool
 
 ## PART 3: Optimizing theano to do it all on the GPU
 
+
 """
 This is the actual implementation of our convolutional RBM.
 The class implements only contrastive divergence learning so far
@@ -27,12 +31,12 @@ class CRBM:
     """
     Initialize the cRBM. The parameters here are global params that should not change
     during the execution of training or testing and characterize the network.
-    
+
     Parameters:
     _motifLength:    How long are the motifs (position weight matrices PWM). This
                      This is equivalent to ask what the number of k-mers is.
                      The current approach only deals with one fixed motif length.
-                     
+             
     _numMotifs:      How many motifs are applied to the sequence, that is how many
                      hidden units does the network have. Each hidden unit consists
                      of a vector of size (sequenceLength-motifLength+1)
@@ -56,30 +60,30 @@ class CRBM:
         self.c = theano.shared(value=c, name='c', borrow=True)
         self.poolingFactor = poolingFactor
         self.learningRate = learningRate
-        
+
         # infrastructural parameters
         self.theano_rng = RS(seed=1234)
         self.params = [self.motifs, self.bias, self.c]
+        self.hyperParams = [self.motifLength, self.numMotifs, self.poolingFactor, self.learningRate]
+        
         self.debug = False
         self.observers = []
-    
     
     def initializeMotifs (self):
         # create random motifs (2*self.numMotifs to respect both strands)
         x = np.random.rand(2 * self.numMotifs, 1, 4, self.motifLength).astype(np.float32)
-        
         # create reverse complement
         for i in range(0, 2*self.numMotifs, 2):
             x[i+1] = x[i,:,::-1,::-1]
-            
+        
         self.motifs = theano.shared(value=x, name='W', borrow=True)
-        
-        
+
+
     def setCustomKernels (self, customKernels):
         if len(customKernels.shape) != 4 or customKernels.shape[1] != 1:
             print "New motifs must be a 4D matrix with dims: (K x 1 x numOfLetters(4) x numOfKMers)"
             return
-        
+
         self.numMotifs = (customKernels.shape[0] / 2)
         self.motifLength = customKernels.shape[3]
         #b = np.random.rand(1, self.numMotifs).astype(np.float32)
@@ -93,36 +97,44 @@ class CRBM:
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
-        
         self.motifs = theano.shared(value=customKernels.astype(np.float32))
         self.params = [self.motifs, self.bias, self.c]
         print "New motifs set. # Motifs: " + str(self.numMotifs) + " K-mer-Length: " + str(self.motifLength)
-
+        
     def addObserver (self, _observer):
         self.observers.append(_observer)
-        
-        
+
     def saveModel (self, _filename):
         numpyParams = []
         for param in self.params:
             numpyParams.append(param.get_value())
-
+        
+        pickleObject = (numpyParams, self.hyperParams, self.observers)
         with open(_filename, 'w') as f:
-            cPickle.dump(numpyParams, f)
+            cPickle.dump(pickleObject, f)
 
     def loadModel (self, filename):
-        numpyParams = []
+        pickleObject = ()
         with open(filename, 'r') as f:
-            numpyParams = cPickle.load(f)
-
-        if numpyParams == []:
+            pickleObject = cPickle.load(f)
+        
+        if pickleObject == ():
             raise IOError("Something went wrong loading the model!")
+        
+        numpyParams, hyperParams, observers = pickleObject
+        
+        # get the cRBM params done
         motifs, bias, c = numpyParams
         self.motifs = theano.shared(value=motifs, name='W', borrow=True)
         self.bias = theano.shared(value=bias, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
-
         self.params = [self.motifs, self.bias, self.c]
+        
+        # restore hyper parameters
+        self.motifLength, self.numMotifs, self.poolingFactor, self.learningRate = hyperParams
+        
+        # restore the observers
+        self.observers = observers
         return
     
     
@@ -284,12 +296,12 @@ class CRBM:
         print "Start training the model..."
         start = time.time()
         for obs in self.observers:
-			print "Initial Score of observer: " + str(obs.calculateScore())
+			print "Initial Score of " + str(obs.name) + ": " + str(obs.calculateScore())
         for epoch in range(epochs):
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
             for obs in self.observers:
-                print "Score of function: " + str(obs.calculateScore())
+                print "Score of " + str(obs.name) + ": " + str(obs.calculateScore())
             print "[Epoch " + str(epoch) + "] done!"
 
         # done with training
