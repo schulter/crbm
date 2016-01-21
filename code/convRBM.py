@@ -211,7 +211,7 @@ class CRBM:
             C_data = T.set_subtensor(subT_result, localResult)
 
         # make the kernels respect the strand structure
-        #C_data = self.makeDerivativesStrandCompliant(C_data)
+        C_data = self.makeDerivativesStrandCompliant(C_data)
 
         der_Motifs = T.sum(C_data, axis=0, keepdims=True) / self.hyper_params['number_of_motifs'] # mean over training examples
         der_Motifs = der_Motifs.dimshuffle(1, 0, 2, 3) # bring back to former shape

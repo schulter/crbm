@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 
@@ -14,12 +16,12 @@ import theano
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 100
-cd_k = 10
+epochs = 120
+cd_k = 1
 learning_rate = 0.00001
 motif_length = 11
-number_of_motifs = 10
-batch_size = 50
+number_of_motifs = 15
+batch_size = 100
 pooling_factor = 5
 
 train_test_ratio = 0.01
