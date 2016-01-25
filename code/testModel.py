@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 
@@ -16,7 +16,7 @@ import theano
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 120
+epochs = 150
 cd_k = 1
 learning_rate = 0.00001
 motif_length = 11
@@ -61,13 +61,13 @@ learner = CRBM(hyperParams=hyper_params)
 free_energy_observer = observer.FreeEnergyObserver(learner, testingData, "Free Energy Testing Observer")
 learner.addObserver(free_energy_observer)
 free_energy_train_observer = observer.FreeEnergyObserver(learner, trainingData, "Free Energy Training Observer")
-#learner.addObserver(free_energy_train_observer)
+learner.addObserver(free_energy_train_observer)
 
 # add the observers for reconstruction error (test and train)
 reconstruction_observer = observer.ReconstructionErrorObserver(learner, testingData, "Reconstruction Error Testing Observer")
 learner.addObserver(reconstruction_observer)
 reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, trainingData, "Reconstruction Error Training Observer")
-#learner.addObserver(reconstruction_observer_train)
+learner.addObserver(reconstruction_observer_train)
 
 # add the observer of the motifs during training (to look at them afterwards)
 motif_observer = observer.MotifObserver(learner, trainingData)
@@ -82,7 +82,8 @@ learner.trainMinibatch(trainingData, epochs, batch_size, cd_k)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
-file_name = datetime.now().strftime("models/trainedModel_%Y_%m_%d_%H_%M.pkl.zip")
+date_string = datetime.now().strftime("trainedModel_%Y_%m_%d_%H_%M")
+file_name = "../../models/" + date_string + ".pkl"
 print "Saving model to " + str(file_name)
 learner.saveModel(file_name)
 
@@ -90,7 +91,7 @@ learner.saveModel(file_name)
 plt.subplot(2,1,1)
 plt.ylabel('Free energy function')
 plt.xlabel('Number Of Epoch')
-plt.title('Free Energy')
+plt.title(str(epochs) + " epo " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
 plt.plot(free_energy_observer.scores)
 plt.plot(free_energy_train_observer.scores)
 
@@ -102,5 +103,5 @@ plt.plot(reconstruction_observer.scores)
 plt.plot(reconstruction_observer_train.scores)
 
 # save plot to file
-file_name_plot = "training_" + str(epochs) + "epo_" + str(motif_length) + "kmers_" + str(number_of_motifs) + "motifs_CD"+str(cd_k)+".png"
+file_name_plot = "../../plots/" + date_string + ".png"
 plt.savefig(file_name_plot)
