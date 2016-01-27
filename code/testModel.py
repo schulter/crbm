@@ -13,10 +13,11 @@ import time
 from datetime import datetime
 import cPickle
 import theano
+import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 150
+epochs = 500
 cd_k = 1
 learning_rate = 0.00001
 motif_length = 11
@@ -73,6 +74,9 @@ learner.addObserver(reconstruction_observer_train)
 motif_observer = observer.MotifObserver(learner, trainingData)
 learner.addObserver(motif_observer)
 
+# add the motif hit scanner
+motif_hit_observer = observer.MotifHitObserver(learner, testingData)
+learner.addObserver(motif_hit_observer)
 print "Data mat shape: " + str(trainingData.shape)
 
 
@@ -82,15 +86,15 @@ learner.trainMinibatch(trainingData, epochs, batch_size, cd_k)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file
-date_string = datetime.now().strftime("trainedModel_%Y_%m_%d_%H_%M")
-file_name = "../../models/" + date_string + ".pkl"
+date_string = datetime.now().strftime("%Y_%m_%d_%H_%M")
+os.mkdir('../../training/' + date_string)
+file_name = "../../training/" + date_string + "/model.pkl"
 print "Saving model to " + str(file_name)
 learner.saveModel(file_name)
 
 # plot
 plt.subplot(2,1,1)
 plt.ylabel('Free energy function')
-plt.xlabel('Number Of Epoch')
 plt.title(str(epochs) + " epo " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
 plt.plot(free_energy_observer.scores)
 plt.plot(free_energy_train_observer.scores)
@@ -103,5 +107,5 @@ plt.plot(reconstruction_observer.scores)
 plt.plot(reconstruction_observer_train.scores)
 
 # save plot to file
-file_name_plot = "../../plots/" + date_string + ".png"
+file_name_plot = "../../training/" + date_string + "/errorPlot.png"
 plt.savefig(file_name_plot)
