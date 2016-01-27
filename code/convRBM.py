@@ -72,6 +72,7 @@ class CRBM:
         self.params = [self.motifs, self.bias, self.c]
         
         self.debug = False
+        self.setToZero = False
         self.observers = []
 
 
@@ -95,7 +96,7 @@ class CRBM:
         self.hyper_params['motif_length'] = customKernels.shape[3]
         numMotifs = self.hyper_params['number_of_motifs']
         
-        if self.debug:
+        if self.setToZero:
             b = np.zeros((1, 2*numMotifs)).astype(np.float32)
             c = np.zeros((1, 4)).astype(np.float32)
         else:
@@ -211,7 +212,7 @@ class CRBM:
             C_data = T.set_subtensor(subT_result, localResult)
 
         # make the kernels respect the strand structure
-        C_data = self.makeDerivativesStrandCompliant(C_data)
+        #C_data = self.makeDerivativesStrandCompliant(C_data)
 
         der_Motifs = T.sum(C_data, axis=0, keepdims=True) / self.hyper_params['number_of_motifs'] # mean over training examples
         der_Motifs = der_Motifs.dimshuffle(1, 0, 2, 3) # bring back to former shape
