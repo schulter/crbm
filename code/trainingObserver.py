@@ -34,7 +34,7 @@ class FreeEnergyObserver (TrainingObserver):
 		return state
 
 	def calculateScore (self):
-		iterations = self.data.shape[0] / self.batchSize
+		iterations = max(self.data.shape[0] / self.batchSize, 1)
 		sumOfScores = 0
 		for batchIdx in xrange(iterations):
 			sumOfScores += self.scoringFunction(batchIdx)
@@ -73,7 +73,7 @@ class FreeEnergyObserver (TrainingObserver):
 		visiblePart = T.mean(D * cMod, axis=0) # dim: 1 x 4 x N_v
 		visiblePart = T.sum(visiblePart)
 		
-		free_energy = hiddenPart + visiblePart # don't return the negative because it's more difficult to plot
+		free_energy = -hiddenPart - visiblePart # don't return the negative because it's more difficult to plot
 		
 		return free_energy
 
@@ -91,7 +91,7 @@ class ReconstructionErrorObserver (TrainingObserver):
 		return state
 
 	def calculateScore (self):
-		iterations = self.data.shape[0] / self.batchSize
+		iterations = max(self.data.shape[0] / self.batchSize, 1)
 		sumOfScores = 0
 		for batchIdx in xrange(iterations):
 			sumOfScores += self.scoringFunction(batchIdx)
@@ -147,3 +147,49 @@ class MotifObserver (TrainingObserver):
 		
 	def getScoringFunction (self):
 		return np.sum # it's a stub
+
+
+
+class MotifHitObserver (TrainingObserver):
+
+	def __init__(self, _model, _data, _name="Motif Hit Observer"):
+		TrainingObserver.__init__(self, _model, _data, _name)
+
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['data']
+		del state['model']
+		return state
+
+
+	def calculateScore (self):
+		iterations = max(self.data.shape[0] / self.batchSize, 1)
+		sumOfHits = 0
+		for batchIdx in xrange(iterations):
+			sumOfHits += self.scoringFunction(batchIdx)
+		avgHits = sumOfHits / iterations # mean
+		
+		
+		self.scores.append(avgHits)
+		return avgHits.mean()
+
+
+	def getScoringFunction(self):
+		dataS = theano.shared(value=self.data, borrow=True, name='data')
+
+		D = T.tensor4('data')
+		index = T.lscalar()
+		hits = self.getMotifHits(D)
+		scoringFun = theano.function([index],
+					 hits,
+					 allow_input_downcast=True,
+					 givens={D: dataS[index*self.batchSize:(index+1)*self.batchSize]},
+					 name='MotifHitInErrorObservation'
+		)
+		return scoringFun
+
+
+	def getMotifHits (self, D):
+		[H, S_H] = self.model.forwardBatch(D)
+		return T.mean(H, axis=0) # mean over samples (K x 1 x N_h)
