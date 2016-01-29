@@ -149,6 +149,24 @@ class MotifObserver (TrainingObserver):
 		return np.sum # it's a stub
 
 
+class ParameterObserver (TrainingObserver):
+	
+	def __init__(self, _model, _data, _name="Parameter Observer"):
+		TrainingObserver.__init__(self, _model, _data, _name)
+	
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['data']
+		del state['model']
+		return state
+
+	def calculateScore (self):
+		self.scores.append((self.model.motifs.get_value(), self.model.bias.get_value(), self.model.c.get_value()))
+		
+	def getScoringFunction (self):
+		return np.sum # it's a stub
+
 
 class MotifHitObserver (TrainingObserver):
 

@@ -17,11 +17,11 @@ import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 500
-cd_k = 1
+epochs = 900
+cd_k = 5
 learning_rate = 0.00001
 motif_length = 11
-number_of_motifs = 15
+number_of_motifs = 2
 batch_size = 100
 pooling_factor = 5
 
@@ -71,8 +71,8 @@ reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, tr
 learner.addObserver(reconstruction_observer_train)
 
 # add the observer of the motifs during training (to look at them afterwards)
-motif_observer = observer.MotifObserver(learner, trainingData)
-learner.addObserver(motif_observer)
+param_observer = observer.ParameterObserver(learner, trainingData)
+learner.addObserver(param_observer)
 
 # add the motif hit scanner
 motif_hit_observer = observer.MotifHitObserver(learner, testingData)
