@@ -1,3 +1,6 @@
+# SNAIL
+
+
 # Theano imports
 import theano
 import theano.tensor as T
@@ -9,8 +12,12 @@ from theano import pp
 import numpy as np
 import random
 import time
+import cPickle
+import pprint
 
 from utils import max_pool
+
+
 
 """
 This is the actual implementation of our convolutional RBM.
@@ -24,12 +31,12 @@ class CRBM:
     """
     Initialize the cRBM. The parameters here are global params that should not change
     during the execution of training or testing and characterize the network.
-    
+
     Parameters:
     _motifLength:    How long are the motifs (position weight matrices PWM). This
                      This is equivalent to ask what the number of k-mers is.
                      The current approach only deals with one fixed motif length.
-                     
+             
     _numMotifs:      How many motifs are applied to the sequence, that is how many
                      hidden units does the network have. Each hidden unit consists
                      of a vector of size (sequenceLength-motifLength+1)
@@ -40,74 +47,117 @@ class CRBM:
                      mod(sequenceLength-motifLength+1, poolingFactor) == 0
                      (1 = equivalent to sigmoid activation)
     """
-    def __init__ (self, _motifLength, _numMotifs, _learningRate=0.1, _poolingFactor=1):
+    def __init__ (self, hyperParams=None, file_name=None):
+        
+        if file_name == None and hyperParams == None:
+            raise ArgumentError('Must Specify Either Filename or Hyper parameters')
+            return
+        
+        if hyperParams == None:
+            self.loadModel(file_name)
+            return
+
         # parameters for the motifs
-        self.motifLength = _motifLength
-        self.numMotifs = _numMotifs
+        self.hyper_params = hyperParams
         self.initializeMotifs()
         
         # cRBM parameters (2*x to respect both strands of the DNA)
-        b = np.random.rand(1, 2*self.numMotifs).astype(np.float32)
+        b = np.random.rand(1, 2*self.hyper_params['number_of_motifs']).astype(np.float32)
         c = np.random.rand(1, 4).astype(np.float32)
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
-        self.poolingFactor = _poolingFactor
-        self.learningRate = _learningRate
-        
+
         # infrastructural parameters
         self.theano_rng = RS(seed=1234)
         self.params = [self.motifs, self.bias, self.c]
+        
         self.debug = False
-    
-    
+        self.setToZero = False
+        self.observers = []
+
+
     def initializeMotifs (self):
         # create random motifs (2*self.numMotifs to respect both strands)
-        x = np.random.rand(2 * self.numMotifs, 1, 4, self.motifLength).astype(np.float32)
-        
+        x = np.random.rand(2 * self.hyper_params['number_of_motifs'], 1, 4, self.hyper_params['motif_length']).astype(np.float32)
         # create reverse complement
-        for i in range(0, 2*self.numMotifs, 2):
+        for i in range(0, 2*self.hyper_params['number_of_motifs'], 2):
             x[i+1] = x[i,:,::-1,::-1]
-            
+        
         self.motifs = theano.shared(value=x, name='W', borrow=True)
-        
-        
+
+
     def setCustomKernels (self, customKernels):
         if len(customKernels.shape) != 4 or customKernels.shape[1] != 1:
             print "New motifs must be a 4D matrix with dims: (K x 1 x numOfLetters(4) x numOfKMers)"
             return
+
+		
+        self.hyper_params['number_of_motifs'] = (customKernels.shape[0] / 2)
+        self.hyper_params['motif_length'] = customKernels.shape[3]
+        numMotifs = self.hyper_params['number_of_motifs']
         
-        self.numMotifs = (customKernels.shape[0] / 2)
-        self.motifLength = customKernels.shape[3]
-        #b = np.random.rand(1, self.numMotifs).astype(np.float32)
-        
-        if self.debug:
-            b = np.zeros((1, 2*self.numMotifs)).astype(np.float32)
+        if self.setToZero:
+            b = np.zeros((1, 2*numMotifs)).astype(np.float32)
             c = np.zeros((1, 4)).astype(np.float32)
         else:
-            b = np.random.rand(1, 2*self.numMotifs).astype(np.float32)
+            b = np.random.rand(1, 2*numMotifs).astype(np.float32)
             c = np.random.rand(1, 4).astype(np.float32)
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
-        
         self.motifs = theano.shared(value=customKernels.astype(np.float32))
         self.params = [self.motifs, self.bias, self.c]
-        print "New motifs set. # Motifs: " + str(self.numMotifs) + " K-mer-Length: " + str(self.motifLength)
-
+        print "New motifs set. # Motifs: " + str(numMotifs) + " K-mer-Length: " + str(self.hyper_params['motif_length'])
         
-### ------------------------------THE TOUGH STUFF-------------------------------- ###
-### ----------------------------------------------------------------------------- ###
+    def addObserver (self, _observer):
+        self.observers.append(_observer)
+
+    def saveModel (self, _filename):
+        numpyParams = []
+        for param in self.params:
+            numpyParams.append(param.get_value())
+        
+        pickleObject = (numpyParams, self.hyper_params, self.observers)
+        with open(_filename, 'w') as f:
+            cPickle.dump(pickleObject, f)
+
+
+    def loadModel (self, filename):
+        pickleObject = ()
+        with open(filename, 'r') as f:
+            pickleObject = cPickle.load(f)
+        
+        if pickleObject == ():
+            raise IOError("Something went wrong loading the model!")
+        
+        numpyParams, self.hyper_params, self.observers = pickleObject
+        
+        # get the cRBM params done
+        motifs, bias, c = numpyParams
+        self.motifs = theano.shared(value=motifs, name='W', borrow=True)
+        self.bias = theano.shared(value=bias, name='bias', borrow=True)
+        self.c = theano.shared(value=c, name='c', borrow=True)
+        self.params = [self.motifs, self.bias, self.c]
+    
+
 
     def forwardBatch (self, data):
-        out = conv.conv2d(data, self.motifs[:,:,::-1,::-1])
+        # calculate filter(D, W) + b
+        out = conv.conv2d(data, self.motifs[:,:,::-1,::-1]) # cross-correlation
         if self.debug:
             out = theano.printing.Print('Convolution result forward: ')(out)
         bMod = self.bias
         bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias until it works
         out = out + bMod
-        pooled = max_pool(out.dimshuffle(0,2,1,3), pool_shape=(2, self.poolingFactor), theano_rng=self.theano_rng)
-        H = pooled[1]
-        S = pooled[3]
+        
+        # perform prob. max pooling g(filter(D,W) + b) and sampling
+        pooled = max_pool(out.dimshuffle(0,2,1,3),
+						  pool_shape=(2, self.hyper_params['pooling_factor']),
+						  theano_rng=self.theano_rng
+						 )
+
+        H = pooled[1].dimshuffle(0, 2, 1, 3)
+        S = pooled[3].dimshuffle(0, 2, 1, 3)
         if self.debug:
             H = theano.printing.Print('Hidden Probabilites: ')(H)
             S = theano.printing.Print('prob max pooled layer: ')(S)
@@ -115,9 +165,9 @@ class CRBM:
 
 
     def backwardBatch (self, H_sample):
-        K = self.motifs.dimshuffle(1, 0, 2, 3)[:,:,::-1,::-1] # kernel is flipped prior to convolution
-        H_shuffled = H_sample.dimshuffle(0, 2, 1, 3) # interpret the kernels as channels (will be summed automatically)
-        C = conv.conv2d(H_shuffled, K, border_mode='full')[:,:,::-1,:]
+        # dimshuffle the motifs to have K as channels (will be summed automatically)
+        W = self.motifs.dimshuffle(1, 0, 2, 3)#[:,:,::-1,:] # needs that due to miraculous reasons
+        C = conv.conv2d(H_sample, W, border_mode='full')#[:,:,::-1,:]
         if self.debug:
             C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
         out = T.sum(C, axis=1, keepdims=True) # sum over all K
@@ -127,49 +177,48 @@ class CRBM:
         res = self.softmax(out)
         return res
 
-    
+        
     def makeDerivativesStrandCompliant (self, derivatives):
-        # scan over the even kernels and sum them together with the next
-        # one (k[0] + k[1] etc)
-        def sumWithNext(idx, output_model):
-            sub1 = output_model[:,idx,:,:]
-            sub2 = output_model[:,idx+1,:,:]
-            added = sub1 + sub2
-            out = T.set_subtensor(sub1, added)
-            return out
-        result, updates = theano.scan(fn=sumWithNext,
-                                      outputs_info=derivatives,
-                                      sequences=[T.arange(start=0, stop=2*self.numMotifs, step=2)])
-        result = result[-1] # only take the last one
+        # reshape such that even kernels form one matrix, while the uneven form the other
+        N_batch, K, letters, length = derivatives.shape
+        D_reshaped = derivatives.reshape((N_batch, K//2, 2, letters, length))
         
-        # now scan over the unevens and set their derivative to the reverse complement
-        # of the evens
-        def setToReverseComplement(idx, output_model):
-            sub1 = output_model[:,idx,:,:]
-            revCom = output_model[:,idx-1,:,:]
-            revCom = revCom[:,::-1,::-1]
-            return T.set_subtensor(sub1, revCom)
-        result, updates = theano.scan(fn=setToReverseComplement,
-                                      outputs_info=result,
-                                      sequences=[T.arange(start=1, stop=2*self.numMotifs, step=2)])
+        # sum together the even and uneven ones and construct the reverse thing
+        D_summed = D_reshaped[:,:,0,:,:] + D_reshaped[:,:,1,:,:]
+        D_summed_reverse = D_summed[:,:,::-1,::-1] # just invert cols and rows of kernel
         
-        return result[-1]
+        # melt it all back together by first adding yet another dimension
+        D_restored = T.stack(D_summed, D_summed_reverse)
+        D_result = D_restored.dimshuffle(1, 2, 0, 3, 4).reshape((N_batch, K, letters, length))
+        
+        if self.debug:
+            D_result = theano.printing.Print('Derivatives strand compliant')(D_result)
+
+        return D_result
         
 
     def expectedDerivative (self, hiddenProbs, data):
-        mean = T.mean(hiddenProbs, axis=0, keepdims=True) # sum over all training data to get avg (but keep dim)
-        H_reshaped = mean.dimshuffle(2, 0, 1, 3)
-        # TODO: Capture the 1 <-> 1 relation between samples in H and D
-        # Currently, this is done by mean (1st row) but that's not good at all
-        out = conv.conv2d(data, H_reshaped)
-        # TODO: perform scan here and sum even ones while setting unevens to 0.
-        # TODO: Don't mean over all then, but use sum and divide by K (not 2*K like in this case)
-        out = self.makeDerivativesStrandCompliant(out)
         
-        der_Motifs = T.sum(out, axis=0, keepdims=True) / self.numMotifs # mean over training examples
+        # new code to capture 1 <-> 1 relationship
+        #assert data.shape[0] == hiddenProbs.shape[0]
+        N_batch = data.shape[0]
+        C_data = T.zeros((N_batch, 2*self.hyper_params['number_of_motifs'], 4, self.hyper_params['motif_length']))
+        
+        for seq in range(self.batchSize):
+            d_i = data[seq].dimshuffle('x',0,1,2)
+            h_i = hiddenProbs[seq].dimshuffle(0,'x',1,2)[:,:,::-1,::-1]
+            subT_result = C_data[seq]
+            localResult = conv.conv2d(d_i, h_i).sum(axis=0)
+            C_data = T.set_subtensor(subT_result, localResult)
+
+        # make the kernels respect the strand structure
+        #C_data = self.makeDerivativesStrandCompliant(C_data)
+
+        der_Motifs = T.sum(C_data, axis=0, keepdims=True) / self.hyper_params['number_of_motifs'] # mean over training examples
         der_Motifs = der_Motifs.dimshuffle(1, 0, 2, 3) # bring back to former shape
-        der_bias = T.mean(T.sum(hiddenProbs, axis=3), axis=0)
+        der_bias = T.mean(T.sum(hiddenProbs, axis=3), axis=0).dimshuffle(1,0)
         der_c = T.mean(T.sum(data, axis=3), axis=0)
+
         return (der_Motifs, der_bias, der_c)
     
     
@@ -198,9 +247,9 @@ class CRBM:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
         
         # update the parameters
-        new_motifs = self.motifs + self.learningRate * (G_motif_data - G_motif_model)
-        new_bias = self.bias + self.learningRate * (G_bias_data - G_bias_model)
-        new_c = self.c + self.learningRate * (G_c_data - G_c_model)
+        new_motifs = self.motifs + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
+        new_bias = self.bias + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
+        new_c = self.c + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
         
         #score = self.getDataReconstruction(D)
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c)]
@@ -208,22 +257,21 @@ class CRBM:
         return updates
     
     
-    def trainMinibatch (self, trainData, testData, epochs, batchSize, numOfCDs):
-        
+    def trainMinibatch (self, trainData, epochs, batchSize, numOfCDs):
+
         # assert that pooling can be done without rest to the division
-        assert (((trainData.shape[3] - self.motifLength + 1) % self.poolingFactor) == 0)
-        assert (((testData.shape[3] - self.motifLength + 1) % self.poolingFactor) == 0)
-        
+        assert (((trainData.shape[3] - self.hyper_params['motif_length'] + 1) % self.hyper_params['pooling_factor']) == 0)
+
+        self.batchSize = batchSize
         # some debug printing
         itPerEpoch = trainData.shape[0] / batchSize
         print "BatchSize: " + str(batchSize)
         print "Num of iterations per epoch: " + str(itPerEpoch)
         start = time.time()
-        
+
         # compile training function
-        
+        print "Start compiling Theano training function..."
         train_set = theano.shared(value=trainData, borrow=True, name='trainData')
-        
         index = T.lscalar()
         D = T.tensor4('data')
         updates = self.train_model(D, numOfCDs)
@@ -237,22 +285,23 @@ class CRBM:
               },
               name='train_CRBM'
         )
+        print "Compilation of Theano training function finished in " + str(time.time()-start) + " seconds"
 
-        reconFun = self.getFreeEnergyFunction()
-        print "Compilation of theano function finished in " + str(time.time()-start) + " seconds"
-        print "Start training..."
+        # now perform training
+        print "Start training the model..."
         start = time.time()
-        allScores = []
-        allScores.append(reconFun(testData))
-        print "Initial Reconstruction Error: " + str(allScores[-1])
+        for obs in self.observers:
+            print "Initial Score of " + str(obs.name) + ": " + str(obs.calculateScore())
         for epoch in range(epochs):
-            smallScores = []
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
-            allScores.append(reconFun(testData))
-            print "[Epoch " + str(epoch) + "] Reconstruction Error: " + str(allScores[-1])
+            for obs in self.observers:
+                print "Score of " + str(obs.name) + ": " + str(obs.calculateScore())
+            print "[Epoch " + str(epoch) + "] done!"
+
+        # done with training
         print "Training finished after: " + str(time.time()-start) + " seconds!"
-        return allScores
+
 
     def getReconFun (self):
         D = T.tensor4('data')
@@ -266,7 +315,7 @@ class CRBM:
         S_V = self.sampleVisibleLayer(V)
         sames = S_V * D # elements are 1 if they have the same letter...
         count = T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
-        return score
+        return count
     
  
     def getFreeEnergyFunction (self):
@@ -305,3 +354,6 @@ class CRBM:
     def softmax (self, x):
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
         
+    
+    def printHyperParams (self):
+        pprint.pprint(self.hyper_params)

@@ -5,57 +5,41 @@ from Bio.Seq import Seq
 from Bio import motifs
 
 import numpy as np
+import re
 
 
 
-def getIntToLetter (letter):
-    if letter == 'A' or letter == 'a':
-        return 0
-    elif letter == 'C' or letter == 'c':
-        return 1
-    elif letter == 'G' or letter == 'g':
-        return 2
-    elif letter == 'T' or letter == 't':
-        return 3
-    else:
-        print "ERROR. LETTER " + letter + " DOES NOT EXIST!"
-        return -1
+L=dict({'A':0,'a':0,'C':1,'c':1,'G':2,'g':2,'T':3,'t':3})
 
-
-def getMatrixFromSeq (seq):
+def getOneHotSeq(seq):
     m = len(seq.alphabet.letters)
     n = len(seq)
+    # why can't it just be np.zeros((m,n),dtype=np.float32)
     result = np.zeros((1, m, n), dtype=np.float32)
-    revSeq = seq.reverse_complement()
     for i in range(len(seq)):
-        result[0,getIntToLetter(seq[i]),i] = 1
+        result[0,L[seq[i]],i]= 1
     return result
-
-
 
 """
 This class reads sequences from fasta files.
 To use it, create an instance of that object and use
 the function readSequencesFromFile.
 """
-class FASTAReader:
-    
-
+class SeqReader:
     def readSequencesFromFile (self, filename):
         dhsSequences = []
         for dhs in sio.parse(open(filename), 'fasta', IUPAC.unambiguous_dna):
-            dhsSequences.append(dhs.seq)
+            match=re.search(r'N',str(dhs.seq), re.I)
+            if match:
+                print "skip sequence containing N"
+		continue
+            dhsSequences.append(getOneHotSeq(dhs.seq))
         return dhsSequences
-		
-	def readSequencesAsMatrices (self, filename):
-		dhsSequences = []
-		for dhs in sio.parse(open(filename), 'fasta', IUPAC.unambiguous_dna):
-			dhsSequences.append(getMatrixFromSeq(dhs.seq))
     
     
-class JASPARReader:
     
 
+class JASPARReader:
     def readSequencesFromFile (self, filename):
         matrices = []
         for mat in motifs.parse(open(filename), 'jaspar'):

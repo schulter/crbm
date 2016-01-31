@@ -1,6 +1,12 @@
 # exclude python temporary files
 *~
 
+# exclude models (pickle files)
+*.pkl
+
+# exclude python compiled files
+*.pyc
+
 # exclude images and plots
 *.png
 
