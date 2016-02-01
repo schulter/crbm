@@ -3,32 +3,57 @@
 \usepackage{amsmath}
 
 \begin{document}
-Definition of the convolutional restricted Boltzmann machine
+\section{Convolutional restricted Boltzmann machine}
+In this section, we introduce a convolutional restricted
+Boltzmann machine for modeling the DNA sequence my means
+of a collection of motifs.\par
+We introduce a set of DNA sequences $\mathbf{V}=\{\mathbf{v}^1,\cdots,\mathbf{v}^S\}$, where
+$S$ denotes the number of sequences.
+ $\mathbf{v}^i$ denotes a the $i^{th}$ sequence, which is represented by a $4\times N$ matrix
+according to an one-hot representation with $N$ being the length of the sequence.
+In the one-hot representation the nucleotides 'A', 'C', 'G' and 'T' are given
+by the vectors $[1,0,0,0]$, $[0,1,0,0]$, $[0,0,1,0]$ and  $[0,0,0,1]$, respectively.
+We assume that our model is composed of $K$ motifs, each of
+which of length $M$.
+Additionally, we introduce a set of hidden activation
+maps, one per sequence  and strand, denoted by 
+$\mathbf{H}=\{\mathbf{H}^{1}, \cdots, \mathbf{H}^{S}\}$ 
+and ${\mathbf{H}'}=\{\mathbf{H'}^{1}, \cdots, \mathbf{H'}^{S}\}$, 
+ (the apostrophe denotes the reverse strand hidden activations).
+Each $\mathbf{H}^s$ and ${\mathbf{H}'}^s$ corrsponds to
+a binary matrix of dimension $(N-M+1)\times K$.
+The hidden activation maps $\mathbf{H}$ and $\mathbf{H}'$ indicate the locations of where 
+in the sequence motif hits were obtained.
+Together, $\mathbf{V}$, $\mathbf{H}$ and $\mathbf{H}'$ comprise the random variables of our model.\par
+Next, we introduce the parameters of the model to be the set of motifs $\mathbf{W}$,
+the bias associated with the motifs $\mathbf{b}=b_1\cdots b_K$ and the bias associated with the sequence $\mathbf{c}=[c_A,c_C,c_G,c_T]^\top$.
+We denote the collection of motifs $\mathbf{W}=\{\mathbf{W}^1,\cdots, \mathbf{W}^K\}$, where each $\mathbf{W}^i$
+represents a $4 \times M$ matrix for all $i$.
+Each motif can be thought of a position-specific score matrix (a concept which is widely 
+used in the bioinformatics community for modelling  transcription factor binding sites).
+The convolutional restricted Boltzmann machine is defined by
 \begin{align}
-	E(\mathbf{v},\mathbf{h}, \mathbf{h}')=
-	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top W_{m+1}^k h_n^k \nonumber\\
-	-\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} v_{n+m}^\top C(W_{M-m}^k) {h'}_n^k\nonumber\\
-	- \sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k)
-	-c^\top \sum_{n=1}^{N}v_n
+	E(\mathbf{V},\mathbf{H}, {\mathbf{H}'})=
+	-\sum_{s=1}^S\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} 
+	  {\mathbf{v}^s}_{n+m}^\top W_{m+1}^k \mathbf{H}_{nk}^s \nonumber\\
+	-\sum_{s=1}^S\sum_{n=1}^{N-M+1}\sum_{k=1}^K\sum_{m=0}^{M-1} 
+	  {\mathbf{v}^s}_{n+m}^\top C(W_{M-m}^k) {\mathbf{H}'}_{nk}^s\nonumber\\
+	- \sum_{k=1}^K b_k \sum_{s=1}^S\sum_{n=1}^{N-M+1}(\mathbf{H}_{nk}^s + {\mathbf{H}'}_{nk}^s)
+	-c^\top \sum_{s=1}^S\sum_{n=1}^{N}\mathbf{v}^s_n
 \end{align}
-where $\mathbf{v}$ denotes the DNA sequence, $\mathbf{h}$ the forward strand 
-hidden states, $\mathbf{h}'$ the reverse strand
-hidden states, $N$ the length of the DNA, $M$ the length of the motif, 
-$K$ the number of the motif, $W^k$ the parameters for the $k^{th}$ motif,
-$b_k$ the bias term for the $k^{th}$ motif and $c$ the bias for the
-nucleotide. Additionally, the function $C(.)$ denotes complementary mapping
+ Additionally, the function $C(.)$ denotes complementary mapping
 as follows: $A\rightarrow T$, 
 $C\rightarrow G$, $G\rightarrow C$ and $T\rightarrow A$.
-The associated probability to a state $(\mathbf{v},\mathbf{h})$ is then given
+The associated probability to a state $(\mathbf{V},\mathbf{H})$ is then given
 by
 \begin{align}
-	P(\mathbf{v},\mathbf{h}, \mathbf{h}')=\frac{e^{-E(\mathbf{v},\mathbf{h},\mathbf{h}')}}
-	{\sum_{\mathbf{v}}\sum_{\mathbf{h}, \mathbf{h}'}e^{-E(\mathbf{v},\mathbf{h},\mathbf{h}')}}
+	P(\mathbf{V},\mathbf{H}, \mathbf{H}')=\frac{e^{-E(\mathbf{V},\mathbf{H},\mathbf{H}')}}
+	{\sum_{\mathbf{V}}\sum_{\mathbf{H}, \mathbf{H}'}e^{-E(\mathbf{V},\mathbf{H},\mathbf{H}')}}
 \end{align}
-and the marginal probability of $(\mathbf{v})$
+and the marginal probability of $(\mathbf{V})$
 \begin{align}
-	P(\mathbf{v})=\frac{\sum_{\mathbf{h}, \mathbf{h}'}e^{-E(\mathbf{v},\mathbf{h},\mathbf{h}')}}
-	{\sum_{\mathbf{v}}\sum_{\mathbf{h},\mathbf{h}'}e^{-E(\mathbf{v},\mathbf{h},\mathbf{h}')}}
+	P(\mathbf{V})=\frac{\sum_{\mathbf{H}, \mathbf{H}'}e^{-E(\mathbf{V},\mathbf{H},\mathbf{H}')}}
+	{\sum_{\mathbf{V}}\sum_{\mathbf{H},\mathbf{H}'}e^{-E(\mathbf{V},\mathbf{H},\mathbf{H}')}}
 \end{align}
 Since, we cannot perform the marginalization and the computation of the
 partition function directly, we leverage MCMC techniques in order
@@ -39,9 +64,10 @@ to carry out inference.\par
 Energy contributions per position and motif can be computed massively parallel
 by leveraging GPUs:
 \begin{align}
-	x_n^k&:=\sum_{m=0}^{M-1}v_{n+m}^\top W_{m+1}^k + b_k\\
-	{x'}_n^k&:=\sum_{m=0}^{M-1}v_{n+m}^\top C(W_{M-m}^k) + b_k\\
+	x_{nk}^s&:=\sum_{m=0}^{M-1}\mathbf{v}_{n+m}^{s\top} \mathbf{W}_{m+1}^k + \mathbf{b}_k\\
+	{x'}_{nk}^s&:=\sum_{m=0}^{M-1}\mathbf{v}_{n+m}^{s\top} C(\mathbf{W}_{M-m}^k) + \mathbf{b}_k\\
 \end{align}
+and 
 At the second step, we employ probabilistic max-pooling, 
 by splitting the range of $N-M+1$ hidden activations for
 each motif and its comlementary motif into $P=(N-M+1)/a$ distinct bins.
@@ -56,11 +82,11 @@ That is, for each $1\leq p\leq P$ and $1\leq i\leq a$ the probabilities
 (assuming that $N-M+1$ is divisible by $a$).\par
 For the top-down pass, we determine $P(\mathbf{v}|\mathbf{h})$ according to
 \begin{align}
-	y_n:=\sum_{k=1}^K\sum_{m=0}^{M-1} W_{m+1}^k h_{n-m}^k + \sum_{k=1}^K\sum_{m=0}^{M-1} C(W_{M-m}^k) {h'}_{n-m}^k + c
+	\mathbf{y}_n:=\sum_{k=1}^K\sum_{m=0}^{M-1} \mathbf{W}_{m+1}^k h_{n-m}^k + \sum_{k=1}^K\sum_{m=0}^{M-1} C(\mathbf{W}_{M-m}^k) {h'}_{n-m}^k + c
 \end{align}
 and 
 \begin{align}
-	P(v_n|\mathbf{h}):=\frac{e^{y_n}}{\mathbf{1}^\top e^{y_n}}
+	P(\mathbf{v}_n|\mathbf{h}):=\frac{e^{y_n}}{\mathbf{1}^\top e^{y_n}}
 \end{align}
 \section{Inference}
 Inference is used to estimate $P(\mathbf{v})$ and is carried out by repeatedly sampling
@@ -68,13 +94,27 @@ $P(\mathbf{h}|\mathbf{v})$ and $P(\mathbf{v}|\mathbf{h})$. It allows us to estim
 marginal distribution $P(\mathbf{v})$, the partition function $Z$ and the gradient for 
 maximum likelihood learning.
 \section{Learning}
-%The gradient with respect to the likelihood
-%\begin{align}
-%	\nabla_{W^k} \log P(\mathbf{v}) 
-%\end{align}
-We adjust the parameters by employing a practical
-short-cut with respect to ordinary maximum likelihood learning,
-referred to as contrastive divergent which is given by
+\subsection{Sparsity constraint}
+In order to force the probabilistic system to learn meaningful interpretations
+of the DNA sequence, we impose the following restriction on the model which adds to
+the energy function
+\begin{align}
+Reg(\mathbf{V}):=\lambda\cdot \sum_{k=1}^K (ReLu(\mathbf{E}_{Data}[\mathbf{H}^k|\mathbf{V}] + \mathbf{E}_{Data}[\mathbf{H'}^k|\mathbf{V}] - \rho))
+\end{align}
+with $\rho=0.01$ meaning that each motif should occur at most once every one hundred positions
+and 
+\begin{align}
+\mathbf{E}_{Data}[\mathbf{H}^k|\mathbf{V}]=\frac{1}{S(N-M+1)}\sum_s\sum_{n=1}^{N-M+1}\sigma(x_n^k) \\
+\mathbf{E}_{Data}[{\mathbf{H}'}^k|\mathbf{V}]=\frac{1}{S(N-M+1)}\sum_s\sum_{n=1}^{N-M+1} \sigma({x'}_n^k)
+\end{align}
+The gradient with respect to the penalization term is given by 
+The gradient with respect to the regularized likelihood is given by
+\begin{align}
+	\nabla_{W^k} \log P(\mathbf{V}) - \nabla_{W^k}Reg(\mathbf{V}).
+\end{align}
+Due to the fact that maximum likelihood learning is rather slow, we
+employ the contrastive divergence optimization strategy, which has been proven
+successful in practice
 \begin{align}
 	CD_{W_j^k}(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto 
 	\sum_{s=1}^S \sum_{i=1}^{N-M+1} v_{i}^s p(h_{i-j+1}^{sk}|\mathbf{v}^s)+
@@ -142,7 +182,10 @@ The Free energy for our setting is defined as
 	%&& +\sum_{k=1}^K b_k \sum_{n=1}^{N-M+1}(h_n^k + {h'}_n^k))
 \end{align}
 \section{Estimation of the partition function}
-Maybe later
+We might follow the AIC appoach in order to estimate the partition
+function \cite{salakhutdinov2008quantitative}. Right now, it is not possible
+to quantify the probability of an observed sequence. However, once we
+have gained access to the partition function, we can.
 %\begin{align}
 %	\nabla_{W^k} \log P(\mathbf{v}^1\cdots\mathbf{v}^S) &\propto
 %	\sum_{s=1}^S \sum_{i=1}^{N-M+1}\mathbf{v}_{[i:i+M-1]}^s* \mathbf{h}_{[i:i+M-1]}^s\nonumber\\
@@ -158,4 +201,7 @@ Maybe later
 %	&-\sum_{s=1}^S \sum_{i=1}^{N-M+1}C(\mathbf{v}_{i-j+1}^{rs})* {h'}_{i}^{rs}
 %\end{align}
 %We use zero-padding $h_i$ where $i<1$ and $i>N-M+1$.
+\bibliographystyle{plain}
+\bibliography{literature}
+
 \end{document}

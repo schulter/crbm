@@ -1,7 +1,7 @@
 import matplotlib
 #matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from sklearn.cross_validation import train_test_split
+#from sklearn.cross_validation import train_test_split
 
 from convRBM import CRBM
 import getData as dataRead
@@ -32,7 +32,7 @@ USE_WHOLE_DATA = True
 
 
 # read the data and split it
-seqReader = dataRead.FASTAReader()
+seqReader = dataRead.SeqReader()
 allSeqs = seqReader.readSequencesFromFile('../data/wgEncodeAwgDnaseUwAg10803UniPk.fa')
 
 if USE_WHOLE_DATA:
@@ -40,14 +40,18 @@ if USE_WHOLE_DATA:
 else:
 	data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(2000)]
 
-train_set, test_set = train_test_split(data, test_size=train_test_ratio)
-print "Training set size: " + str(len(train_set))
-print "Test set size: " + str(len(test_set))
+# no train_test_split necessary
+per=np.random.permutation(len(data))
+itest=per[:int(len(data)*train_test_ratio)]
+itrain=per[int(len(data)*train_test_ratio):]
+#train_set, test_set = train_test_split(data, test_size=train_test_ratio)
+#print "Training set size: " + str(len(train_set))
+#print "Test set size: " + str(len(test_set))
 
 # convert raw sequences to one hot matrices
 start = time.time()
-trainingData = np.array([dataRead.getOneHotMatrixFromSeq(t) for t in train_set])
-testingData = np.array([dataRead.getOneHotMatrixFromSeq(t) for t in test_set])
+trainingData = np.array([data[i] for i in itrain])
+testingData = np.array([data[i] for i in itest])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
 # construct the model
