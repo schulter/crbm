@@ -241,7 +241,7 @@ class CRBM:
             [H_model, S_H] = self.forwardBatch(S_V_model)
         
         # compute the model gradients
-        G_motif_model, G_bias_model, G_c_model = self.expectedDerivative(H_model, D)
+        G_motif_model, G_bias_model, G_c_model = self.expectedDerivative(H_model, S_V_model)
         
         if self.debug:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
