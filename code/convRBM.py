@@ -5,6 +5,7 @@
 import theano
 import theano.tensor as T
 import theano.tensor.nnet.conv as conv
+#import theano.sandbox.cuda.dnn.dnn_conv as dnn_conv
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
 
@@ -141,9 +142,10 @@ class CRBM:
     
 
 
-    def forwardBatch (self, data):
+    def computeHgivenV (self, data):
         # calculate filter(D, W) + b
         out = conv.conv2d(data, self.motifs[:,:,::-1,::-1]) # cross-correlation
+        #out = dnn_conv(data, self.motifs, conv_mode="cross") # cross-correlation
         if self.debug:
             out = theano.printing.Print('Convolution result forward: ')(out)
         bMod = self.bias
@@ -156,15 +158,15 @@ class CRBM:
 						  theano_rng=self.theano_rng
 						 )
 
-        H = pooled[1].dimshuffle(0, 2, 1, 3)
-        S = pooled[3].dimshuffle(0, 2, 1, 3)
+        prob_of_H = pooled[1].dimshuffle(0, 2, 1, 3)
+        H = pooled[3].dimshuffle(0, 2, 1, 3)
         if self.debug:
-            H = theano.printing.Print('Hidden Probabilites: ')(H)
-            S = theano.printing.Print('prob max pooled layer: ')(S)
-        return [H,S] #only return pooled layer and probs
+            prob_of_H = theano.printing.Print('Hidden Probabilites: ')(prob_of_H)
+            H = theano.printing.Print('prob max pooled layer: ')(H)
+        return [prob_of_H,H] #only return pooled layer and probs
 
 
-    def backwardBatch (self, H_sample):
+    def computeVgivenH (self, H_sample):
         # dimshuffle the motifs to have K as channels (will be summed automatically)
         W = self.motifs.dimshuffle(1, 0, 2, 3)#[:,:,::-1,:] # needs that due to miraculous reasons
         C = conv.conv2d(H_sample, W, border_mode='full')#[:,:,::-1,:]
@@ -174,8 +176,15 @@ class CRBM:
         c_bc = self.c
         c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
         out = out + c_bc
-        res = self.softmax(out)
-        return res
+        prob_of_V = self.softmax(out)
+
+        pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
+        V_ = self.theano_rng.multinomial(n=1,pvals=pV_)
+        V = V_.reshape((H_sample.shape[0], 1, H_sample.shape[3], H_sample.shape[2])).dimshuffle(0, 1, 3, 2)
+        V = V.astype('float32')
+        if self.debug:
+            V = theano.printing.Print('Visible Sample: ')(V)
+        return [prob_of_V,V]
 
         
     def makeDerivativesStrandCompliant (self, derivatives):
@@ -197,7 +206,7 @@ class CRBM:
         return D_result
         
 
-    def expectedDerivative (self, hiddenProbs, data):
+    def collectUpdateStatistics(self, hiddenProbs, data):
         
         # new code to capture 1 <-> 1 relationship
         #assert data.shape[0] == hiddenProbs.shape[0]
@@ -221,27 +230,24 @@ class CRBM:
 
         return (der_Motifs, der_bias, der_c)
     
-    
-        
     def train_model (self, D, numOfCDs):
         # calculate the data gradient for weights (motifs) and bias
-        [H_data, S_data] = self.forwardBatch(D)
+        [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
         if self.debug:
-            H_data = theano.printing.Print('Hidden Layer Probabilities: ')(H_data)
+            prob_of_H_given_data = theano.printing.Print('Hidden Layer Probabilities: ')(prob_of_H_given_data)
         # calculate data gradients
-        G_motif_data, G_bias_data, G_c_data = self.expectedDerivative(H_data, D)
+        G_motif_data, G_bias_data, G_c_data = self.collectUpdateStatistics(prob_of_H_given_data, D)
         
         if self.debug:
             G_motif_data = theano.printing.Print('Gradient for motifs (data): ')(G_motif_data)
         # calculate model probs
-        S_H = S_data
+        H_given_model = H_given_data
         for i in range(numOfCDs):
-            V_model = self.backwardBatch(S_H)
-            S_V_model = self.sampleVisibleLayer(V_model)
-            [H_model, S_H] = self.forwardBatch(S_V_model)
+            prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
+            prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
         
         # compute the model gradients
-        G_motif_model, G_bias_model, G_c_model = self.expectedDerivative(H_model, D)
+        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(H_given_model, D)
         
         if self.debug:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
@@ -310,10 +316,10 @@ class CRBM:
     
     
     def getDataReconstruction (self, D):
-        [H, S_H] = self.forwardBatch(D)
-        V = self.backwardBatch(S_H)
-        S_V = self.sampleVisibleLayer(V)
-        sames = S_V * D # elements are 1 if they have the same letter...
+        [prob_of_H, H] = self.computeHgivenV(D)
+        [prob_of_V,V] = self.computeHgivenV(H)
+        #S_V = self.sampleVisibleLayer(V)
+        sames = V * D # elements are 1 if they have the same letter...
         count = T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
         return count
     
@@ -342,15 +348,6 @@ class CRBM:
         return hiddenPart + visiblePart # don't return the negative because it's more difficult to plot
         
         
-    def sampleVisibleLayer (self, V):
-        reshaped = V.dimshuffle(0, 1, 3, 2).reshape((V.shape[0]*V.shape[3], V.shape[2]))
-        S_reshaped = self.theano_rng.multinomial(n=1,pvals=reshaped)
-        S = S_reshaped.reshape((V.shape[0], 1, V.shape[3], V.shape[2])).dimshuffle(0, 1, 3, 2)
-        S = S.astype('float32')
-        if self.debug:
-            S = theano.printing.Print('Visible Sample: ')(S)
-        return S
-    
     def softmax (self, x):
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
         

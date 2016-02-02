@@ -122,12 +122,10 @@ class ReconstructionErrorObserver (TrainingObserver):
 
 
 	def getReconstructionError (self, D):
-		[H, S_H] = self.model.forwardBatch(D)
-		V = self.model.backwardBatch(S_H)
-		S_V = self.model.sampleVisibleLayer(V)
-		sames = S_V * D # elements are 1 if they have the same letter...
-		count = T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
-		return count
+		[prob_of_H, H] = self.model.computeHgivenV(D)
+		[prob_of_V,V] = self.model.computeHgivenV(H)
+		sames = V * D # elements are 1 if they have the same letter...
+		return T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
 
 
 class MotifObserver (TrainingObserver):
@@ -209,5 +207,5 @@ class MotifHitObserver (TrainingObserver):
 
 
 	def getMotifHits (self, D):
-		[H, S_H] = self.model.forwardBatch(D)
+		[prob_of_H, H] = self.model.computeHgivenV(D)
 		return T.mean(H, axis=0) # mean over samples (K x 1 x N_h)

@@ -14,7 +14,6 @@ L=dict({'A':0,'a':0,'C':1,'c':1,'G':2,'g':2,'T':3,'t':3})
 def getOneHotSeq(seq):
     m = len(seq.alphabet.letters)
     n = len(seq)
-    # why can't it just be np.zeros((m,n),dtype=np.float32)
     result = np.zeros((1, m, n), dtype=np.float32)
     for i in range(len(seq)):
         result[0,L[seq[i]],i]= 1
@@ -32,9 +31,18 @@ class SeqReader:
             match=re.search(r'N',str(dhs.seq), re.I)
             if match:
                 print "skip sequence containing N"
-		continue
+                continue
             dhsSequences.append(getOneHotSeq(dhs.seq))
         return dhsSequences
+    def readOneHotFromFile (self, filename):
+        f=open(file,"rb");
+        dhsSequences = cPickle.load(f); 
+        f.close()
+        return dhsSequences
+    def writeOneHotToFile(self, filename, seq):
+        f=open(filename,"wb")
+        cPickle.dump(seq,f,-1)
+        f.close()
     
     
     

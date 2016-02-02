@@ -1,3 +1,6 @@
+from theano.gof.op import get_debug_values
+import numpy as np
+import theano.tensor as T
 
 def max_pool(z, pool_shape, top_down=None, theano_rng=None):
     """
