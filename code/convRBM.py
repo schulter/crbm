@@ -247,7 +247,7 @@ class CRBM:
             prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
         
         # compute the model gradients
-        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(H_given_model, D)
+        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(H_given_model, V_given_model)
         
         if self.debug:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
