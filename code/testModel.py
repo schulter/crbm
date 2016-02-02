@@ -58,7 +58,10 @@ print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 hyper_params = {'number_of_motifs':number_of_motifs,
 				'motif_length':motif_length,
 				'learning_rate':learning_rate,
-				'pooling_factor':pooling_factor
+				'pooling_factor':pooling_factor,
+				'epochs':epochs,
+				'cd_k':cd_k,
+				'batch_size':batch_size
 }
 learner = CRBM(hyperParams=hyper_params)
 
@@ -86,7 +89,7 @@ print "Data mat shape: " + str(trainingData.shape)
 
 # perform training
 start = time.time()
-learner.trainMinibatch(trainingData, epochs, batch_size, cd_k)
+learner.trainModel(trainingData)
 print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
 # save trained model to file

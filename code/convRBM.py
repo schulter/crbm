@@ -230,7 +230,7 @@ class CRBM:
 
         return (der_Motifs, der_bias, der_c)
     
-    def train_model (self, D, numOfCDs):
+    def updateWeightsOnMinibatch (self, D, numOfCDs):
         # calculate the data gradient for weights (motifs) and bias
         [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
         if self.debug:
@@ -263,12 +263,13 @@ class CRBM:
         return updates
     
     
-    def trainMinibatch (self, trainData, epochs, batchSize, numOfCDs):
+    def trainModel (self, trainData):
 
         # assert that pooling can be done without rest to the division
         assert (((trainData.shape[3] - self.hyper_params['motif_length'] + 1) % self.hyper_params['pooling_factor']) == 0)
 
-        self.batchSize = batchSize
+        batchSize=self.hyper_params['batch_size']
+        epochs=self.hyper_params['epochs']
         # some debug printing
         itPerEpoch = trainData.shape[0] / batchSize
         print "BatchSize: " + str(batchSize)
@@ -280,7 +281,7 @@ class CRBM:
         train_set = theano.shared(value=trainData, borrow=True, name='trainData')
         index = T.lscalar()
         D = T.tensor4('data')
-        updates = self.train_model(D, numOfCDs)
+        updates = self.updateWeightsOnMinibatch(D, self.hyper_params['cd_k'])
         trainingFun = theano.function(
               [index],
               None,
