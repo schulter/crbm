@@ -168,8 +168,8 @@ class CRBM:
 
     def computeVgivenH (self, H_sample):
         # dimshuffle the motifs to have K as channels (will be summed automatically)
-        W = self.motifs.dimshuffle(1, 0, 2, 3)#[:,:,::-1,:] # needs that due to miraculous reasons
-        C = conv.conv2d(H_sample, W, border_mode='full')#[:,:,::-1,:]
+        W = self.motifs.dimshuffle(1, 0, 2, 3)
+        C = conv.conv2d(H_sample, W, border_mode='full')
         if self.debug:
             C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
         out = T.sum(C, axis=1, keepdims=True) # sum over all K
@@ -247,7 +247,7 @@ class CRBM:
             prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
         
         # compute the model gradients
-        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(H_given_model, V_given_model)
+        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(prob_of_H_given_model, V_given_model)
         
         if self.debug:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
