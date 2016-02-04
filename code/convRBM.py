@@ -167,6 +167,8 @@ class CRBM:
 
 
     def computeVgivenH (self, H_sample):
+        # first, compute P(V | H) via convolution
+        # P(V | H) = softmax( conv(H, W) + c )
         # dimshuffle the motifs to have K as channels (will be summed automatically)
         W = self.motifs.dimshuffle(1, 0, 2, 3)
         C = conv.conv2d(H_sample, W, border_mode='full')
@@ -178,9 +180,13 @@ class CRBM:
         out = out + c_bc
         prob_of_V = self.softmax(out)
 
+        if self.debug:
+            prob_of_V = theano.printing.Print('Softmax V (probabilities for V):')(prob_of_V)
+
+        # now, we still need the sample of V. Compute it here
         pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
         V_ = self.theano_rng.multinomial(n=1,pvals=pV_)
-        V = V_.reshape((H_sample.shape[0], 1, H_sample.shape[3], H_sample.shape[2])).dimshuffle(0, 1, 3, 2)
+        V = V_.reshape((prob_of_V.shape[0], 1, prob_of_V.shape[3], prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
         V = V.astype('float32')
         if self.debug:
             V = theano.printing.Print('Visible Sample: ')(V)
