@@ -154,7 +154,7 @@ class CRBM:
         
         # perform prob. max pooling g(filter(D,W) + b) and sampling
         pooled = max_pool(out.dimshuffle(0,2,1,3),
-						  pool_shape=(2, self.hyper_params['pooling_factor']),
+						  pool_shape=(1, self.hyper_params['pooling_factor']),
 						  theano_rng=self.theano_rng
 						 )
 
