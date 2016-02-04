@@ -219,7 +219,7 @@ class CRBM:
         N_batch = data.shape[0]
         C_data = T.zeros((N_batch, 2*self.hyper_params['number_of_motifs'], 4, self.hyper_params['motif_length']))
         
-        for seq in range(self.batchSize):
+        for seq in range(self.hyper_params['batch_size']):
             d_i = data[seq].dimshuffle('x',0,1,2)
             h_i = hiddenProbs[seq].dimshuffle(0,'x',1,2)[:,:,::-1,::-1]
             subT_result = C_data[seq]
