@@ -157,9 +157,14 @@ class CRBM:
         out = out + bMod
         
         # perform prob. max pooling g(filter(D,W) + b) and sampling
-        pooled = max_pool(out.dimshuffle(0,2,1,3),
-						  pool_shape=(2, self.hyper_params['pooling_factor']),
-						  theano_rng=self.theano_rng)
+        if self.hyper_params['doublestranded']:
+            pooled = max_pool(out.dimshuffle(0,2,1,3),
+                pool_shape=(2, self.hyper_params['pooling_factor']),
+                theano_rng=self.theano_rng)
+        else:
+            pooled = max_pool(out.dimshuffle(0,2,1,3),
+                pool_shape=(1, self.hyper_params['pooling_factor']),
+                theano_rng=self.theano_rng)
 
         prob_of_H = pooled[1].dimshuffle(0, 2, 1, 3)
         H = pooled[3].dimshuffle(0, 2, 1, 3)
@@ -170,9 +175,14 @@ class CRBM:
 
 
     def computeVgivenH (self, H_sample):
+        # first, compute P(V | H) via convolution
+        # P(V | H) = softmax( conv(H, W) + c )
         # dimshuffle the motifs to have K as channels (will be summed automatically)
-        W = self.motifs.dimshuffle(1, 0, 2, 3)#[:,:,::-1,:] # needs that due to miraculous reasons
-        C = conv.conv2d(H_sample, W, border_mode='full')#[:,:,::-1,:]
+        W = self.motifs.dimshuffle(1, 0, 2, 3)
+        #theano.printing.Print('motif-dims: ')(W)
+        #theano.printing.Print('H-dims: ')(H_sample)
+        #return H_sample
+        C = conv.conv2d(H_sample, W, border_mode='full')
         if self.debug:
             C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
         out = T.sum(C, axis=1, keepdims=True) # sum over all K
@@ -181,10 +191,15 @@ class CRBM:
         out = out + c_bc
         prob_of_V = self.softmax(out)
 
+        #return prob_of_V
+        if self.debug:
+            prob_of_V = theano.printing.Print('Softmax V (probabilities for V):')(prob_of_V)
+
+        # now, we still need the sample of V. Compute it here
         pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
-        V_ = self.theano_rng.multinomial(n=1,pvals=pV_)
-        V = V_.reshape((H_sample.shape[0], 1, H_sample.shape[3], H_sample.shape[2])).dimshuffle(0, 1, 3, 2)
-        V = V.astype('float32')
+        V_ = self.theano_rng.multinomial(n=1,pvals=pV_).astype(theano.config.floatX)
+        V = V_.reshape((prob_of_V.shape[0], 1, prob_of_V.shape[3], prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
+        #V = V.astype(theano.config.floatX)
         if self.debug:
             V = theano.printing.Print('Visible Sample: ')(V)
         return [prob_of_V,V]
@@ -218,7 +233,6 @@ class CRBM:
 
         return evh,eh
         
-
     def collectUpdateStatistics(self, prob_of_H, data):
     	  #reshape input 
         data=data.dimshuffle(1,0,2,3,'x')
@@ -258,7 +272,7 @@ class CRBM:
             prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
         
         # compute the model gradients
-        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(H_given_model, V_given_model)
+        G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(prob_of_H_given_model, V_given_model)
         
         if self.debug:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)

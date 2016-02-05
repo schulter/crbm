@@ -123,7 +123,7 @@ class ReconstructionErrorObserver (TrainingObserver):
 
 	def getReconstructionError (self, D):
 		[prob_of_H, H] = self.model.computeHgivenV(D)
-		[prob_of_V,V] = self.model.computeHgivenV(H)
+		[prob_of_V, V] = self.model.computeVgivenH(H)
 		sames = V * D # elements are 1 if they have the same letter...
 		return T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
 
