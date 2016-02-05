@@ -62,10 +62,13 @@ class CRBM:
         
         # cRBM parameters (2*x to respect both strands of the DNA)
         if self.hyper_params["doublestranded"]:
-            b = np.random.randn(1, 2*self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+            #b = np.random.randn(1, 2*self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+            b = np.zeros((1, 2*self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         else:
-            b = np.random.randn(1, self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+            #b = np.random.randn(1, self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+            b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         c = np.random.rand(1, 4).astype(theano.config.floatX)
+        c = np.zeros((1, 4)).astype(theano.config.floatX)
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
 
@@ -241,13 +244,16 @@ class CRBM:
         #average_VH=conv.conv2d(data,prob_of_H) / T.prod(2*prob_of_H.shape[1:])
         average_VH=conv3d(data,prob_of_H, [0.]*2*self.hyper_params['number_of_motifs'],[1]*3)
         average_VH=average_VH/ T.prod(2*prob_of_H.shape[1:])
-        average_H=T.mean(prob_of_H,axis=(1,2,3))
-        average_V=T.mean(data,axis=(0,1,3))
+        average_H=T.mean(prob_of_H,axis=(1,2,3)).astype(theano.config.floatX)
+        average_V=T.mean(data,axis=(0,1,3)).astype(theano.config.floatX)
 
         average_VH=average_VH[0,:,:,:,:]
-        average_VH=average_VH.dimshuffle(3,0,1,2)
+        average_VH=average_VH.dimshuffle(3,0,1,2).astype(theano.config.floatX)
         average_H=average_H.dimshuffle(1,0)
         average_V=average_V.dimshuffle(1,0)
+        #average_VH.astype(theano.config.floatX)
+        #average_H.astype(theano.config.floatX)
+        #average_V.astype(theano.config.floatX)
         # make the kernels respect the strand structure
         #if self.hyper_params['doublestranded']:
             #average_VH,average_H = self.matchWeightchangeForComplementaryMotifs(average_VH,average_H)
@@ -279,17 +285,17 @@ class CRBM:
         #TODO: add adaptive learning rate
 				#TODO: add momentum
 				#TODO: add sparsity constraint
-        #reg_motif, reg_bias = self.gradientSparsityConstraint(D)
+        reg_motif,reg_bias = self.gradientSparsityConstraint(D)
 
         # update the parameters
-        new_motifs = self.motifs + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
-        new_bias = self.bias + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
+        new_motifs = self.motifs + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model -self.hyper_params['sparsity']*reg_motif)
+        new_bias = self.bias + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model-self.hyper_params['sparsity']*reg_bias)
         new_c = self.c + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
         
         #score = self.getDataReconstruction(D)
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c)]
 
-        return updates
+        return updates#, T.sum(abs(G_motif_data - G_motif_model))
     
     
     def trainModel (self, trainData):
@@ -331,6 +337,8 @@ class CRBM:
         for epoch in range(epochs):
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
+                ret=1.
+                print("[average CD: " + str(ret))
             for obs in self.observers:
                 print "Score of " + str(obs.name) + ": " + str(obs.calculateScore())
             print "[Epoch " + str(epoch) + "] done!"
@@ -340,15 +348,9 @@ class CRBM:
 
     def gradientSparsityConstraint(self, data):
         #get expected[H|V]
-        [prob_of_H, H]=self.computeHgivenD(data)
-        #average over the entire dataset
-        if T.mean(prob_of_H) <= self.hyper_params['rho']:
-            ## TODO correct broadcast
-            return 0.0
-        else:
-	          #x=prob_of_H*(1-prob_of_H)
-	          return [dnn_conv(prob_of_H*(1-prob_of_H),data,conv_mode="cross"),
-	          		T.sum(prob_of_H*(1-prob_of_H))]
+        prob_of_H, H=self.computeHgivenV(data)
+        return T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs),
+               T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
 
     def getReconFun (self):
         D = T.tensor4('data')
