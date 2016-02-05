@@ -4,10 +4,11 @@ from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 from Bio import motifs
 
+import cPickle
+import gzip
+
 import numpy as np
 import re
-
-
 
 L=dict({'A':0,'a':0,'C':1,'c':1,'G':2,'g':2,'T':3,'t':3})
 
@@ -35,12 +36,12 @@ class SeqReader:
             dhsSequences.append(getOneHotSeq(dhs.seq))
         return dhsSequences
     def readOneHotFromFile (self, filename):
-        f=open(file,"rb");
+        f=gzip.open(filename,"rb");
         dhsSequences = cPickle.load(f); 
         f.close()
         return dhsSequences
     def writeOneHotToFile(self, filename, seq):
-        f=open(filename,"wb")
+        f=gzip.open(filename,"wb")
         cPickle.dump(seq,f,-1)
         f.close()
     
