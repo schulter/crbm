@@ -15,21 +15,7 @@ import cPickle
 import theano
 import os
 
-########################################################
-# SET THE HYPER PARAMETERS
-epochs = 900
-cd_k = 5
-learning_rate = 0.00001
-doublestranded=True
-motif_length = 11
-number_of_motifs = 2
-batch_size = 100
-pooling_factor = 5
-sparsity=0.001 # regularization parameter
-rho=0.001 # threshold for motif hit frequency
-
-
-train_test_ratio = 0.01
+train_test_ratio = 0.1
 USE_WHOLE_DATA = True
 ########################################################
 
@@ -55,16 +41,17 @@ testingData = np.array([data[i] for i in itest])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
 # construct the model
-hyper_params = {'number_of_motifs':number_of_motifs,
-				'motif_length':motif_length,
-				'learning_rate':learning_rate,
-				'doublestranded':doublestranded,
-				'pooling_factor':pooling_factor,
-				'epochs':epochs,
-				'cd_k':cd_k,
-				'sparsity':sparsity,
-				'rho':rho,
-				'batch_size':batch_size
+hyper_params = {'number_of_motifs':30,
+				'motif_length':11,
+				'learning_rate':0.001,
+				'doublestranded':True,
+				'pooling_factor':5,
+				'epochs':900,
+				'cd_k':5,
+				'sparsity':0.001, # use 0.0 to disable sparsity constraint
+				'rho':0.001,
+				'batch_size':100,
+				'momentum':0.9 # use 0.0 to disable momentum
 }
 learner = CRBM(hyperParams=hyper_params)
 
@@ -105,7 +92,7 @@ learner.saveModel(file_name)
 # plot
 plt.subplot(2,1,1)
 plt.ylabel('Free energy function')
-plt.title(str(epochs) + " epo " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+plt.title(str(hyper_params["epochs"]) + " epo " + str(hyper_params["motif_length"]) + " kmers " + str(hyper_params["number_of_motifs"]) + " motifs_CD "+str(hyper_params["cd_k"])+".png")
 plt.plot(free_energy_observer.scores)
 plt.plot(free_energy_train_observer.scores)
 
