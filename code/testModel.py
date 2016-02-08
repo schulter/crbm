@@ -24,7 +24,7 @@ validationSize = 500
 
 # read the data and split it
 seqReader = dataRead.SeqReader()
-allSeqs = seqReader.readSeqsInDirectory('../../data/')
+allSeqs = seqReader.readOneHotFromFile('../data/seq.onehot.gz')
 
 if USE_WHOLE_DATA:
 	data = allSeqs

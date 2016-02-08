@@ -3,11 +3,6 @@
 import theano
 import theano.tensor as T
 import theano.tensor.nnet.conv as conv
-#from theano.tensor.nnet.Conv3D import conv3D as conv3d
-<<<<<<< HEAD
-=======
-from theano.tensor.nnet.conv3d2d import conv3d as conv3d
->>>>>>> cd4d1f4b7f372cdc0ddbc7b8f1e7fa16b055dd54
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
 
@@ -291,7 +286,9 @@ class CRBM:
         #TODO: add adaptive learning rate
 				#TODO: add momentum
 				#TODO: add sparsity constraint
-        #reg_motif,reg_bias = self.gradientSparsityConstraint(D)
+        reg_motif,reg_bias = self.gradientSparsityConstraint(D)
+        if self.hyper_params['doublestranded']:
+            reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
 
         # update the parameters
 
