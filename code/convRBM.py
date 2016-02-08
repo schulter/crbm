@@ -81,8 +81,8 @@ class CRBM:
         # create random motifs (2*self.numMotifs to respect both strands)
         x = np.random.rand(2 * self.hyper_params['number_of_motifs'], 1, 4, self.hyper_params['motif_length']).astype(np.float32)
         # create reverse complement
-        for i in range(0, 2*self.hyper_params['number_of_motifs'], 2):
-            x[i+1] = x[i,:,::-1,::-1]
+        #for i in range(0, 2*self.hyper_params['number_of_motifs'], 2):
+        #    x[i+1] = x[i,:,::-1,::-1]
         
         self.motifs = theano.shared(value=x, name='W', borrow=True)
 
@@ -221,23 +221,24 @@ class CRBM:
         
         for seq in range(self.hyper_params['batch_size']):
             d_i = data[seq].dimshuffle('x',0,1,2)
-            h_i = hiddenProbs[seq].dimshuffle(0,'x',1,2)[:,:,::-1,::-1]
+            h_i = hiddenProbs[seq].dimshuffle(0,'x',1,2)[:,:,::-1,::-1] # we want cross-correlation here
             subT_result = C_data[seq]
-            localResult = conv.conv2d(d_i, h_i).sum(axis=0)
+            localResult = conv.conv2d(d_i, h_i).sum(axis=0) #sum to get rid of dimension
             C_data = T.set_subtensor(subT_result, localResult)
 
         # make the kernels respect the strand structure
         #C_data = self.makeDerivativesStrandCompliant(C_data)
 
-        der_Motifs = T.sum(C_data, axis=0, keepdims=True) / self.hyper_params['number_of_motifs'] # mean over training examples
+        #der_Motifs = T.sum(C_data, axis=0, keepdims=True) / self.hyper_params['number_of_motifs'] # mean over training examples
+        der_Motifs = T.mean(C_data, axis=0, keepdims=True) # mean over training examples
         der_Motifs = der_Motifs.dimshuffle(1, 0, 2, 3) # bring back to former shape
-        der_bias = T.mean(T.sum(hiddenProbs, axis=3), axis=0).dimshuffle(1,0)
-        der_c = T.mean(T.sum(data, axis=3), axis=0)
+        der_bias = T.mean(T.mean(hiddenProbs, axis=3), axis=0).dimshuffle(1,0)
+        der_c = T.mean(T.mean(data, axis=3), axis=0)
 
         return (der_Motifs, der_bias, der_c)
     
     def updateWeightsOnMinibatch (self, D, numOfCDs):
-        # calculate the data gradient for weights (motifs) and bias
+        # calculate the data gradient for weights (motifs), bias and c
         [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
         if self.debug:
             prob_of_H_given_data = theano.printing.Print('Hidden Layer Probabilities: ')(prob_of_H_given_data)
