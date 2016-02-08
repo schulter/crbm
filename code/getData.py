@@ -9,6 +9,7 @@ import gzip
 
 import numpy as np
 import re
+import os
 
 L=dict({'A':0,'a':0,'C':1,'c':1,'G':2,'g':2,'T':3,'t':3})
 
@@ -35,15 +36,26 @@ class SeqReader:
                 continue
             dhsSequences.append(getOneHotSeq(dhs.seq))
         return dhsSequences
+
     def readOneHotFromFile (self, filename):
         f=gzip.open(filename,"rb");
         dhsSequences = cPickle.load(f); 
         f.close()
         return dhsSequences
+
     def writeOneHotToFile(self, filename, seq):
         f=gzip.open(filename,"wb")
         cPickle.dump(seq,f,-1)
         f.close()
+        
+    def readSeqsInDirectory (self, dirName, format="oneHot"):
+        listOfSeqs = []
+        for filename in os.listdir(dirName):
+            if filename.endswith('.fa'):
+                path = os.path.join(dirName, filename)
+                if format == "oneHot":
+                    listOfSeqs += self.readSequencesFromFile(path)
+        return listOfSeqs
     
     
     
