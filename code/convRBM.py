@@ -350,7 +350,6 @@ class CRBM:
         #get expected[H|V]
         prob_of_H, H=self.computeHgivenV(data)
         return T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs),
-               T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
 
     def getReconFun (self):
         D = T.tensor4('data')
