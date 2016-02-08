@@ -20,10 +20,14 @@ import os
 epochs = 900
 cd_k = 5
 learning_rate = 0.00001
+doublestranded=True
 motif_length = 11
 number_of_motifs = 2
 batch_size = 100
 pooling_factor = 5
+sparsity=0.001 # regularization parameter
+rho=0.001 # threshold for motif hit frequency
+
 
 train_test_ratio = 0.01
 USE_WHOLE_DATA = True
@@ -40,13 +44,9 @@ if USE_WHOLE_DATA:
 else:
 	data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(2000)]
 
-# no train_test_split necessary
 per=np.random.permutation(len(data))
 itest=per[:int(len(data)*train_test_ratio)]
 itrain=per[int(len(data)*train_test_ratio):]
-#train_set, test_set = train_test_split(data, test_size=train_test_ratio)
-#print "Training set size: " + str(len(train_set))
-#print "Test set size: " + str(len(test_set))
 
 # convert raw sequences to one hot matrices
 start = time.time()
@@ -58,9 +58,12 @@ print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 hyper_params = {'number_of_motifs':number_of_motifs,
 				'motif_length':motif_length,
 				'learning_rate':learning_rate,
+				'doublestranded':doublestranded,
 				'pooling_factor':pooling_factor,
 				'epochs':epochs,
 				'cd_k':cd_k,
+				'sparsity':sparsity,
+				'rho':rho,
 				'batch_size':batch_size
 }
 learner = CRBM(hyperParams=hyper_params)
