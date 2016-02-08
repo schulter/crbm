@@ -17,27 +17,28 @@ import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 900
-cd_k = 5
-learning_rate = 0.00001
-doublestranded=True
+epochs = 2
+cd_k = 1
+learning_rate = 0.001
+doublestranded=False
 motif_length = 11
-number_of_motifs = 2
+number_of_motifs = 20
 batch_size = 100
-pooling_factor = 5
+pooling_factor = 2
 sparsity=0.001 # regularization parameter
 rho=0.001 # threshold for motif hit frequency
 
 
 train_test_ratio = 0.01
 USE_WHOLE_DATA = True
+validationSize = 500
 ########################################################
 
 
 
 # read the data and split it
 seqReader = dataRead.SeqReader()
-allSeqs = seqReader.readSequencesFromFile('../data/wgEncodeAwgDnaseUwAg10803UniPk.fa')
+allSeqs = seqReader.readSeqsInDirectory('../../data/')
 
 if USE_WHOLE_DATA:
 	data = allSeqs
@@ -48,10 +49,17 @@ per=np.random.permutation(len(data))
 itest=per[:int(len(data)*train_test_ratio)]
 itrain=per[int(len(data)*train_test_ratio):]
 
+print "Test set size: " + str(len(itest))
+print "Train set size: " + str(len(itrain))
+
+val = [random.randrange(0, len(itrain)) for i in range(validationSize)]
+
 # convert raw sequences to one hot matrices
 start = time.time()
 trainingData = np.array([data[i] for i in itrain])
 testingData = np.array([data[i] for i in itest])
+validationData = np.array([data[i] for i in val])
+
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
 # construct the model
@@ -71,21 +79,21 @@ learner = CRBM(hyperParams=hyper_params)
 # add the observers for free energy (test and train)
 free_energy_observer = observer.FreeEnergyObserver(learner, testingData, "Free Energy Testing Observer")
 learner.addObserver(free_energy_observer)
-free_energy_train_observer = observer.FreeEnergyObserver(learner, trainingData, "Free Energy Training Observer")
+free_energy_train_observer = observer.FreeEnergyObserver(learner, validationData, "Free Energy Training Observer")
 learner.addObserver(free_energy_train_observer)
 
 # add the observers for reconstruction error (test and train)
 reconstruction_observer = observer.ReconstructionErrorObserver(learner, testingData, "Reconstruction Error Testing Observer")
 learner.addObserver(reconstruction_observer)
-reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, trainingData, "Reconstruction Error Training Observer")
+reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, validationData, "Reconstruction Error Training Observer")
 learner.addObserver(reconstruction_observer_train)
 
 # add the observer of the motifs during training (to look at them afterwards)
-param_observer = observer.ParameterObserver(learner, trainingData)
+param_observer = observer.ParameterObserver(learner, None)
 learner.addObserver(param_observer)
 
 # add the motif hit scanner
-motif_hit_observer = observer.MotifHitObserver(learner, testingData)
+motif_hit_observer = observer.MotifHitObserver(learner, validationData)
 learner.addObserver(motif_hit_observer)
 print "Data mat shape: " + str(trainingData.shape)
 
