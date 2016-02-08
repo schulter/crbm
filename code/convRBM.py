@@ -79,6 +79,9 @@ class CRBM:
         self.debug = False
         self.setToZero = False
         self.observers = []
+        self.motif_velocity=theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX), name='velocity_of_W',borrow=True)
+        self.bias_velocity=theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX), name='velocity_of_bias',borrow=True)
+        self.c_velocity=theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX), name='velocity_of_c',borrow=True)
 
 
     def initializeMotifs (self):
@@ -288,12 +291,18 @@ class CRBM:
         reg_motif,reg_bias = self.gradientSparsityConstraint(D)
 
         # update the parameters
-        new_motifs = self.motifs + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model -self.hyper_params['sparsity']*reg_motif)
-        new_bias = self.bias + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model-self.hyper_params['sparsity']*reg_bias)
-        new_c = self.c + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+
+        vmotifs=self.hyper_params['momentum']*self.motif_velocity + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model -self.hyper_params['sparsity']*reg_motif)
+        vbias=self.hyper_params['momentum']*self.bias_velocity +self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model -self.hyper_params['sparsity']*reg_bias)
+        vc=self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+
+        new_motifs = self.motifs + vmotifs
+        new_bias = self.bias + vbias
+        new_c = self.c + vc
         
         #score = self.getDataReconstruction(D)
-        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c)]
+        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                   (self.motif_velocity,vmotifs),(self.bias_velocity,vbias),(self.c_velocity,vc)]
 
         return updates#, T.sum(abs(G_motif_data - G_motif_model))
     
@@ -337,8 +346,6 @@ class CRBM:
         for epoch in range(epochs):
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
-                ret=1.
-                print("[average CD: " + str(ret))
             for obs in self.observers:
                 print "Score of " + str(obs.name) + ": " + str(obs.calculateScore())
             print "[Epoch " + str(epoch) + "] done!"
@@ -349,7 +356,7 @@ class CRBM:
     def gradientSparsityConstraint(self, data):
         #get expected[H|V]
         prob_of_H, H=self.computeHgivenV(data)
-        return T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs),
+        return T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs),T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
 
     def getReconFun (self):
         D = T.tensor4('data')
