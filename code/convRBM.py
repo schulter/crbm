@@ -5,7 +5,7 @@
 import theano
 import theano.tensor as T
 import theano.tensor.nnet.conv as conv
-from theano.tensor.nnet.Conv3D import conv3D as conv3d
+#from theano.tensor.nnet.Conv3D import conv3D as conv3d
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
 
@@ -67,7 +67,7 @@ class CRBM:
         else:
             #b = np.random.randn(1, self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
             b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
-        c = np.random.rand(1, 4).astype(theano.config.floatX)
+        #c = np.random.rand(1, 4).astype(theano.config.floatX)
         c = np.zeros((1, 4)).astype(theano.config.floatX)
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
@@ -212,54 +212,57 @@ class CRBM:
 
         
     def matchWeightchangeForComplementaryMotifs(self, evh,eh):
-        # reshape such that even kernels form one matrix, while the uneven form the other
-        #N_batch, K, letters, length = derivatives.shape
-        #reshape
-        evhre = evh.reshape((1, evh.shape[1]//2, 2, evh.shape[2], evh.shape[3]))
-        
-        # sum up statistics for both strands
-        evhre[:,:,0,:,:] = evhre[:,:,0,:,:] + evhre[:,:,1,::-1,::-1]
-        evhre[:,:,1,:,:] = evhre[:,:,0,::-1,::-1]
-        #reshape it back to the original form
+
+        evhre = evh.reshape((evh.shape[0]//2, 2, 1,evh.shape[2], evh.shape[3]))
+        evhre_ = T.inc_subtensor(evhre[:,0,:,:,:], evhre[:,1,:,::-1,::-1])
+        evhre = T.set_subtensor(evhre[:,1,:,:,:], evhre[:,0,:,::-1,::-1])
         evh=evhre.reshape(evh.shape)
+        evh=evh/2.
 
 
-        ehre = eh.reshape((eh.shape[0]//2, 2))
-        ehre[:,0] = ehre[:,0] + ehre[:,1]
-        ehre[:,1] = ehre[:,0]
+        ehre = eh.reshape((1,eh.shape[1]//2, 2))
+        ehre=T.inc_subtensor(ehre[:,:,0], ehre[:,:,1])
+        ehre=T.set_subtensor(ehre[:,:,1], ehre[:,:,0])
         eh=ehre.reshape(eh.shape)
-        #D_summed_reverse = D_summed[:,:,::-1,::-1] # just invert cols and rows of kernel
-        
-        # melt it all back together by first adding yet another dimension
-        #D_restored = T.stack(D_summed, D_summed_reverse)
-        #D_result = D_restored.dimshuffle(1, 2, 0, 3, 4).reshape((N_batch, K, letters, length))
-        
-        #if self.debug:
-            #D_result = theano.printing.Print('Derivatives strand compliant')(D_result)
+        eh=eh/2.
 
         return evh,eh
         
+    def collectVHStatistics(self, prob_of_H, data):
+    	  #reshape input 
+        data=data.dimshuffle(1,0,2,3)
+        prob_of_H=prob_of_H.dimshuffle(1,0,2,3)
+        avh=conv.conv2d(data,prob_of_H[:,:,:,::-1],border_mode="valid")
+        avh=avh/ T.prod(2*prob_of_H.shape[1:])
+        avh=avh.dimshuffle(1,0,2,3).astype(theano.config.floatX)
+
+        return avh
+
+    def collectVStatistics(self, data):
+    	  #reshape input 
+        a=T.mean(data,axis=(0,1,3)).astype(theano.config.floatX)
+        a=a.dimshuffle('x',0)
+        a=T.inc_subtensor(a[:,:],a[:,::-1]) #match a-t and c-g occurances
+
+        return a
+
+    def collectHStatistics(self, data):
+    	  #reshape input 
+        a=T.mean(data,axis=(0,2,3)).astype(theano.config.floatX)
+        a=a.dimshuffle('x',0)
+
+        return a
+
     def collectUpdateStatistics(self, prob_of_H, data):
     	  #reshape input 
-        data=data.dimshuffle(1,0,2,3,'x')
-        prob_of_H=prob_of_H.dimshuffle(1,0,2,3,'x')
 
-        #average_VH=conv.conv2d(data,prob_of_H) / T.prod(2*prob_of_H.shape[1:])
-        average_VH=conv3d(data,prob_of_H, [0.]*2*self.hyper_params['number_of_motifs'],[1]*3)
-        average_VH=average_VH/ T.prod(2*prob_of_H.shape[1:])
-        average_H=T.mean(prob_of_H,axis=(1,2,3)).astype(theano.config.floatX)
-        average_V=T.mean(data,axis=(0,1,3)).astype(theano.config.floatX)
+        average_VH=self.collectVHStatistics(prob_of_H, data)
+        average_H=self.collectHStatistics(prob_of_H)
+        average_V=self.collectVStatistics(data)
 
-        average_VH=average_VH[0,:,:,:,:]
-        average_VH=average_VH.dimshuffle(3,0,1,2).astype(theano.config.floatX)
-        average_H=average_H.dimshuffle(1,0)
-        average_V=average_V.dimshuffle(1,0)
-        #average_VH.astype(theano.config.floatX)
-        #average_H.astype(theano.config.floatX)
-        #average_V.astype(theano.config.floatX)
         # make the kernels respect the strand structure
-        #if self.hyper_params['doublestranded']:
-            #average_VH,average_H = self.matchWeightchangeForComplementaryMotifs(average_VH,average_H)
+        if self.hyper_params['doublestranded']:
+            average_VH,average_H = self.matchWeightchangeForComplementaryMotifs(average_VH,average_H)
 
         return average_VH, average_H, average_V
     
@@ -294,7 +297,7 @@ class CRBM:
 
         vmotifs=self.hyper_params['momentum']*self.motif_velocity + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model -self.hyper_params['sparsity']*reg_motif)
         vbias=self.hyper_params['momentum']*self.bias_velocity +self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model -self.hyper_params['sparsity']*reg_bias)
-        vc=self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+        vc=self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * ((G_c_data - G_c_model))
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
