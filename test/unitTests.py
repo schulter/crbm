@@ -36,15 +36,16 @@ randSeq1 = dataRead.getOneHotSeq(Seq("ACGTGGGG", IUPAC.unambiguous_dna))
 randSeq2 = dataRead.getOneHotSeq(Seq("ACGTACGT", IUPAC.unambiguous_dna))
 data = np.array([randSeq1], dtype=np.float32)
 
-
+print kernel.shape
 #initialize the learner and set custom kernels
-hyper_params = {'number_of_motifs':1,
+hyper_params = {'number_of_motifs':kernel.shape[0],
                 'motif_length':3,
                 'learning_rate':0.1,
                 'pooling_factor':1,
                 'epochs':100,
                 'cd_k':1,
-                'batch_size':1
+                'batch_size':1,
+                'doublestranded':False
 }
 naiveModel = NaiveCRBM(motifLength=hyper_params['motif_length'],
                        numMotifs=hyper_params['number_of_motifs'],
@@ -96,6 +97,8 @@ D = T.tensor4('data')
 [P_V,V] = gpuModel.computeVgivenH(H)
 gibbs = theano.function([D], V, allow_input_downcast=True)
 
+print "Done!"
+print
 print "Starting forward pass test:"
 print "----------------------------"
 [P_naive,S_n] = naiveModel.computeHgivenV(data)
