@@ -30,25 +30,22 @@ kernel2_ = np.tile(np.flipud(np.fliplr(kernel2[0])), [1,1,1])
 kernel3 = np.random.rand(1,4,3)
 kernel3_ = np.tile(np.flipud(np.fliplr(kernel3[0])), [1,1,1])
 kernel = np.array([kernel1, kernel1_])#, kernel2, kernel2_])#, kernel3, kernel3_])
-#kernel = np.array([kernel3, kernel3_])
-print "Kernel: " + str(kernel)
 
 # initialize the data
 randSeq1 = dataRead.getOneHotSeq(Seq("ACGTGGGG", IUPAC.unambiguous_dna))
 randSeq2 = dataRead.getOneHotSeq(Seq("ACGTACGT", IUPAC.unambiguous_dna))
 data = np.array([randSeq1], dtype=np.float32)
-print "Data shape: " + str(data.shape)
-print data
-print kernel.shape
 
+print kernel.shape
 #initialize the learner and set custom kernels
-hyper_params = {'number_of_motifs':1,
+hyper_params = {'number_of_motifs':kernel.shape[0],
                 'motif_length':3,
                 'learning_rate':0.1,
                 'pooling_factor':1,
                 'epochs':100,
                 'cd_k':1,
-                'batch_size':1
+                'batch_size':1,
+                'doublestranded':False
 }
 naiveModel = NaiveCRBM(motifLength=hyper_params['motif_length'],
                        numMotifs=hyper_params['number_of_motifs'],
@@ -68,6 +65,13 @@ naiveModel.debug = False
 import theano
 import theano.tensor as T
 import theano.tensor.nnet.conv as conv
+
+
+test_failures = 0
+tests_total = 0
+desired_precision = 0.01
+iterations = 1000
+
 
 # create theano functions
 # forward
@@ -93,26 +97,54 @@ D = T.tensor4('data')
 [P_V,V] = gpuModel.computeVgivenH(H)
 gibbs = theano.function([D], V, allow_input_downcast=True)
 
+print "Done!"
+print
 print "Starting forward pass test:"
 print "----------------------------"
 [P_naive,S_n] = naiveModel.computeHgivenV(data)
 [P_GPU,S_g] = forward(data)
 print "ERROR MADE: " + str(np.mean(np.abs(P_naive-P_GPU)))
 print
+
+if np.mean(np.abs(P_naive-P_GPU)) > desired_precision:
+	test_failures += 1
+	print "Failed test on computing H, given V"
+tests_total += 1
+
 print "Starting backward pass test:"
 print "----------------------------"
 [P_V_naive, V_naive] = naiveModel.computeVgivenH(S_n)
 [P_V_gpu,V_gpu] = backward(S_n)
-print "ERROR MADE: " + str(np.sum(np.abs(P_V_naive-P_V_gpu)))
+print "ERROR MADE: " + str(np.mean(np.abs(P_V_naive-P_V_gpu)))
 print
+
+if np.mean(np.abs(P_V_naive-P_V_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on computing V, given H"
+tests_total += 1
+
 print "Starting Gradient pass test:"
 print "----------------------------"
 G_M_naive, G_b_naive, G_c_naive = naiveModel.collectUpdateStatistics(P_naive, data)
 G_M_gpu,G_b_gpu,G_c_gpu = gradient(P_naive, data)
-print "ERROR MADE (Motifs): " + str(np.sum(np.abs(G_M_naive-G_M_gpu)))
-print "ERROR MADE (Bias): " + str(np.sum(np.abs(G_b_naive-G_b_gpu)))
-print "ERROR MADE (c): " + str(np.sum(np.abs(G_c_naive-G_c_gpu)))
+print "ERROR MADE (Motifs): " + str(np.mean(np.abs(G_M_naive-G_M_gpu)))
+print "ERROR MADE (Bias): " + str(np.mean(np.abs(G_b_naive-G_b_gpu)))
+print "ERROR MADE (c): " + str(np.mean(np.abs(G_c_naive-G_c_gpu)))
 
+if np.mean(np.abs(G_M_naive-G_M_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on collecting update stats for kernels"
+tests_total += 1
+
+if np.mean(np.abs(G_b_naive-G_b_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on collecting update stats for bias"
+tests_total += 1
+
+if np.mean(np.abs(G_c_naive-G_c_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on collecting update stats for c"
+tests_total += 1
 
 # NOW, LOAD THE REAL DATA AND COMPARE TRAINING PROCEDURES ON THE DATA
 
@@ -124,11 +156,9 @@ realData = np.array([allSeqs[random.randrange(0, len(allSeqs))] for i in range(1
 
 print "Starting Gibbs Sampling test:"
 print "----------------------------"
-#data = np.array([allSeqs[random.randrange(0,len(allSeqs))] for i in range(1)])
-precision = 100
 V_naive_acc = np.zeros(realData.shape)
 V_gpu_acc = np.zeros(realData.shape)
-for i in range(precision):
+for i in range(iterations):
     V_naive = naiveModel.computeVgivenH(naiveModel.computeHgivenV(realData)[1])[1]
     V_gpu = gibbs(realData)
     V_naive_acc += V_naive
@@ -136,10 +166,14 @@ for i in range(precision):
     if i % 100 == 0 and i > 0:
         print "100 iterations done"
 
-V_naive_acc /= precision
-V_gpu_acc /= precision
+V_naive_acc /= iterations
+V_gpu_acc /= iterations
 print "ERROR MADE: " + str(np.mean(np.abs(V_naive_acc-V_gpu_acc)))
 
+if np.mean(np.abs(V_naive_acc-V_gpu_acc)) > desired_precision:
+	test_failures += 1
+	print "Failed test on gibbs sampling"
+tests_total += 1
 
 naiveModel = NaiveCRBM(motifLength=hyper_params['motif_length'],
                        numMotifs=hyper_params['number_of_motifs'],
@@ -152,7 +186,6 @@ gpuModel.setToZero = True
 naiveModel.setCustomKernels(kernel)
 gpuModel.setCustomKernels(kernel)
 gpuModel.batchSize = 1
-gpuModel.printHyperParams()
 gpuModel.debug = False
 naiveModel.debug = False
 
@@ -165,7 +198,10 @@ new_motifs_naive = naiveModel.kernels
 
 print "ERROR MADE (motifs): " + str(np.mean(np.abs(new_motifs_gpu-new_motifs_naive)))
 
-
+if np.mean(np.abs(new_motifs_gpu-new_motifs_naive)) > desired_precision:
+	test_failures += 1
+	print "Failed test on training model for several epochs"
+tests_total += 1
 
 #data = np.array([allSeqs[random.randrange(0,len(allSeqs))] for i in range(1)])
 naiveModel = NaiveCRBM(motifLength=hyper_params['motif_length'],
@@ -179,7 +215,6 @@ gpuModel.setToZero = True
 naiveModel.setCustomKernels(kernel)
 gpuModel.setCustomKernels(kernel)
 gpuModel.batchSize = 1
-gpuModel.printHyperParams()
 gpuModel.debug = False
 naiveModel.debug = False
 naiveModel.updateWeights = False
@@ -221,6 +256,33 @@ der_m_gpu /= precision
 der_bias_gpu /= precision
 der_c_gpu /= precision
 
+print
 print "ERROR MADE (motifs): " + str(np.mean(np.abs(der_m_naive - der_m_gpu)))
 print "ERROR MADE (bias): " + str(np.mean(np.abs(der_bias_naive - der_bias_gpu)))
 print "ERROR MADE (c): " + str(np.mean(np.abs(der_c_naive - der_c_gpu)))
+print
+
+if np.mean(np.abs(der_m_naive - der_m_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on calculating the right derivatives (motifs)"
+tests_total += 1
+
+if np.mean(np.abs(der_bias_naive - der_bias_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on calculating the right derivatives (bias)"
+tests_total += 1
+
+if np.mean(np.abs(der_c_naive - der_c_gpu)) > desired_precision:
+	test_failures += 1
+	print "Failed test on calculating the right derivatives (c)"
+tests_total += 1
+
+
+print "-----------------------"
+print "STATISTICS FROM TESTING"
+print
+print "Tests performed: " + str(tests_total)
+print "Successfull tests: " + str(tests_total-test_failures)
+print "Failures: " + str(test_failures)
+print "Percentage of success: " + str((tests_total-test_failures) / float(tests_total))
+

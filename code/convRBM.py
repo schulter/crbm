@@ -1,11 +1,13 @@
-# SNAIL
-
 
 # Theano imports
 import theano
 import theano.tensor as T
 import theano.tensor.nnet.conv as conv
 #from theano.tensor.nnet.Conv3D import conv3D as conv3d
+<<<<<<< HEAD
+=======
+from theano.tensor.nnet.conv3d2d import conv3d as conv3d
+>>>>>>> cd4d1f4b7f372cdc0ddbc7b8f1e7fa16b055dd54
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
 
@@ -85,7 +87,7 @@ class CRBM:
 
 
     def initializeMotifs (self):
-        # create random motifs (2*self.numMotifs to respect both strands)
+
         if self.hyper_params["doublestranded"]:
             x = np.random.randn(2 * self.hyper_params['number_of_motifs'], 1, 4, self.hyper_params['motif_length']).astype(theano.config.floatX)
             # create reverse complement
@@ -103,16 +105,15 @@ class CRBM:
             print "New motifs must be a 4D matrix with dims: (K x 1 x numOfLetters(4) x numOfKMers)"
             return
 
-		
-        self.hyper_params['number_of_motifs'] = (customKernels.shape[0] / 2)
+        self.hyper_params['number_of_motifs'] = customKernels.shape[0]
         self.hyper_params['motif_length'] = customKernels.shape[3]
         numMotifs = self.hyper_params['number_of_motifs']
         
         if self.setToZero:
-            b = np.zeros((1, 2*numMotifs)).astype(theano.config.floatX)
+            b = np.zeros((1, numMotifs)).astype(theano.config.floatX)
             c = np.zeros((1, 4)).astype(theano.config.floatX)
         else:
-            b = np.random.rand(1, 2*numMotifs).astype(theano.config.floatX)
+            b = np.random.rand(1, numMotifs).astype(theano.config.floatX)
             c = np.random.rand(1, 4).astype(theano.config.floatX)
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
@@ -156,6 +157,7 @@ class CRBM:
     def computeHgivenV (self, data):
         # calculate filter(D, W) + b
         out = conv.conv2d(data, self.motifs[:,:,::-1,::-1]) # cross-correlation
+        #out = conv.conv2d(data, self.motifs, filter_flip=False)
         if self.debug:
             out = theano.printing.Print('Convolution result forward: ')(out)
         bMod = self.bias
@@ -185,9 +187,6 @@ class CRBM:
         # P(V | H) = softmax( conv(H, W) + c )
         # dimshuffle the motifs to have K as channels (will be summed automatically)
         W = self.motifs.dimshuffle(1, 0, 2, 3)
-        #theano.printing.Print('motif-dims: ')(W)
-        #theano.printing.Print('H-dims: ')(H_sample)
-        #return H_sample
         C = conv.conv2d(H_sample, W, border_mode='full')
         if self.debug:
             C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
@@ -265,9 +264,10 @@ class CRBM:
             average_VH,average_H = self.matchWeightchangeForComplementaryMotifs(average_VH,average_H)
 
         return average_VH, average_H, average_V
+
     
     def updateWeightsOnMinibatch (self, D, numOfCDs):
-        # calculate the data gradient for weights (motifs) and bias
+        # calculate the data gradient for weights (motifs), bias and c
         [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
         if self.debug:
             prob_of_H_given_data = theano.printing.Print('Hidden Layer Probabilities: ')(prob_of_H_given_data)
@@ -278,7 +278,7 @@ class CRBM:
             G_motif_data = theano.printing.Print('Gradient for motifs (data): ')(G_motif_data)
         # calculate model probs
         H_given_model = H_given_data
-				#TODO: PCD
+        #TODO: PCD
         for i in range(numOfCDs):
             prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
             prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
@@ -291,7 +291,7 @@ class CRBM:
         #TODO: add adaptive learning rate
 				#TODO: add momentum
 				#TODO: add sparsity constraint
-        reg_motif,reg_bias = self.gradientSparsityConstraint(D)
+        #reg_motif,reg_bias = self.gradientSparsityConstraint(D)
 
         # update the parameters
 
@@ -307,7 +307,7 @@ class CRBM:
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
                    (self.motif_velocity,vmotifs),(self.bias_velocity,vbias),(self.c_velocity,vc)]
 
-        return updates#, T.sum(abs(G_motif_data - G_motif_model))
+        return updates
     
     
     def trainModel (self, trainData):
@@ -355,6 +355,7 @@ class CRBM:
 
         # done with training
         print "Training finished after: " + str(time.time()-start) + " seconds!"
+
 
     def gradientSparsityConstraint(self, data):
         #get expected[H|V]
