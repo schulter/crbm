@@ -19,17 +19,17 @@ import os
 # SET THE HYPER PARAMETERS
 epochs = 100
 cd_k = 1
-learning_rate = 0.0001
+learning_rate = 0.01
 doublestranded = False
 motif_length = 11
-number_of_motifs = 20
+number_of_motifs = 30
 batch_size = 100
 pooling_factor = 1
-sparsity=1 # regularization parameter
+sparsity=0 # regularization parameter
 rho=0.001 # threshold for motif hit frequency
 
-
 train_test_ratio = 0.01
+
 USE_WHOLE_DATA = True
 validationSize = 500
 ########################################################
@@ -63,6 +63,7 @@ validationData = np.array([data[i] for i in val])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
 # construct the model
+
 hyper_params = {'number_of_motifs':number_of_motifs,
 				'motif_length':motif_length,
 				'learning_rate':learning_rate,
@@ -74,7 +75,8 @@ hyper_params = {'number_of_motifs':number_of_motifs,
 				'sparsity':sparsity,
 				'rho':rho,
 				'batch_size':batch_size,
-				'verbose':False
+				'verbose':False,
+				'momentum':0.9 # use 0.0 to disable momentum
 }
 learner = CRBM(hyperParams=hyper_params)
 
@@ -85,9 +87,9 @@ free_energy_train_observer = observer.FreeEnergyObserver(learner, validationData
 learner.addObserver(free_energy_train_observer)
 
 # add the observers for reconstruction error (test and train)
-reconstruction_observer = observer.ReconstructionRateObserver(learner, testingData, "Reconstruction Error Testing Observer")
+reconstruction_observer = observer.ReconstructionRateObserver(learner, testingData, "Reconstruction Rate Testing Observer")
 learner.addObserver(reconstruction_observer)
-reconstruction_observer_train = observer.ReconstructionRateObserver(learner, validationData, "Reconstruction Error Training Observer")
+reconstruction_observer_train = observer.ReconstructionRateObserver(learner, validationData, "Reconstruction Rate Training Observer")
 learner.addObserver(reconstruction_observer_train)
 
 # add the observer of the motifs during training (to look at them afterwards)
@@ -115,7 +117,8 @@ learner.saveModel(file_name)
 # plot
 plt.subplot(2,1,1)
 plt.ylabel('Free energy function')
-plt.title(learning_rate + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+plt.title(str(hyper_params['learning_rate']) + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+
 plt.plot(free_energy_observer.scores)
 plt.plot(free_energy_train_observer.scores)
 

@@ -3,8 +3,6 @@
 import theano
 import theano.tensor as T
 import theano.tensor.nnet.conv as conv
-#from theano.tensor.nnet.Conv3D import conv3D as conv3d
-from theano.tensor.nnet.conv3d2d import conv3d as conv3d
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
 
@@ -85,6 +83,9 @@ class CRBM:
         
         self.debug = self.hyper_params['verbose']
         self.observers = []
+        self.motif_velocity=theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX), name='velocity_of_W',borrow=True)
+        self.bias_velocity=theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX), name='velocity_of_bias',borrow=True)
+        self.c_velocity=theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX), name='velocity_of_c',borrow=True)
 
 
     def initializeMotifs (self):
@@ -217,51 +218,53 @@ class CRBM:
 
         
     def matchWeightchangeForComplementaryMotifs(self, evh,eh):
-        # reshape such that even kernels form one matrix, while the uneven form the other
-        #N_batch, K, letters, length = derivatives.shape
-        #reshape
-        evhre = evh.reshape((1, evh.shape[1]//2, 2, evh.shape[2], evh.shape[3]))
-        
-        # sum up statistics for both strands
-        evhre[:,:,0,:,:] = evhre[:,:,0,:,:] + evhre[:,:,1,::-1,::-1]
-        evhre[:,:,1,:,:] = evhre[:,:,0,::-1,::-1]
-        #reshape it back to the original form
+
+        evhre = evh.reshape((evh.shape[0]//2, 2, 1,evh.shape[2], evh.shape[3]))
+        evhre_ = T.inc_subtensor(evhre[:,0,:,:,:], evhre[:,1,:,::-1,::-1])
+        evhre = T.set_subtensor(evhre[:,1,:,:,:], evhre[:,0,:,::-1,::-1])
         evh=evhre.reshape(evh.shape)
+        evh=evh/2.
 
 
-        ehre = eh.reshape((eh.shape[0]//2, 2))
-        ehre[:,0] = ehre[:,0] + ehre[:,1]
-        ehre[:,1] = ehre[:,0]
+        ehre = eh.reshape((1,eh.shape[1]//2, 2))
+        ehre=T.inc_subtensor(ehre[:,:,0], ehre[:,:,1])
+        ehre=T.set_subtensor(ehre[:,:,1], ehre[:,:,0])
         eh=ehre.reshape(eh.shape)
-        #D_summed_reverse = D_summed[:,:,::-1,::-1] # just invert cols and rows of kernel
-        
-        # melt it all back together by first adding yet another dimension
-        #D_restored = T.stack(D_summed, D_summed_reverse)
-        #D_result = D_restored.dimshuffle(1, 2, 0, 3, 4).reshape((N_batch, K, letters, length))
-        
-        #if self.debug:
-            #D_result = theano.printing.Print('Derivatives strand compliant')(D_result)
+        eh=eh/2.
 
         return evh,eh
         
+    def collectVHStatistics(self, prob_of_H, data):
+    	  #reshape input 
+        data=data.dimshuffle(1,0,2,3)
+        prob_of_H=prob_of_H.dimshuffle(1,0,2,3)
+        avh=conv.conv2d(data,prob_of_H[:,:,:,::-1],border_mode="valid")
+        avh=avh/ T.prod(2*prob_of_H.shape[1:])
+        avh=avh.dimshuffle(1,0,2,3).astype(theano.config.floatX)
+
+        return avh
+
+    def collectVStatistics(self, data):
+    	  #reshape input 
+        a=T.mean(data,axis=(0,1,3)).astype(theano.config.floatX)
+        a=a.dimshuffle('x',0)
+        a=T.inc_subtensor(a[:,:],a[:,::-1]) #match a-t and c-g occurances
+
+        return a
+
+    def collectHStatistics(self, data):
+    	  #reshape input 
+        a=T.mean(data,axis=(0,2,3)).astype(theano.config.floatX)
+        a=a.dimshuffle('x',0)
+
+        return a
 
     def collectUpdateStatistics(self, prob_of_H, data):
-        #reshape input 
-        D = data.dimshuffle(1,3,'x',0,2)
-        PH = prob_of_H[:,:,::-1,::-1].dimshuffle(1,3,'x',0,2)
+    	  #reshape input 
 
-        # convolve data and hidden layer to obtain the statistics for W
-        C = conv3d(D, PH)
-        average_VH = C[0,:,:,:,:].dimshuffle(1,2,3,0)
-
-        if self.debug:
-            average_VH = theano.printing.Print("Expectation over H -> V connections")(average_VH)
-
-        average_H = T.mean(prob_of_H,axis=(0,3))
-        average_V = T.mean(data,axis=(0,3))
-
-        average_H = average_H.dimshuffle(1,0)
-        #average_V = average_V.dimshuffle(1,0)
+        average_VH=self.collectVHStatistics(prob_of_H, data)
+        average_H=self.collectHStatistics(prob_of_H)
+        average_V=self.collectVStatistics(data)
 
         # make the kernels respect the strand structure
         if self.hyper_params['doublestranded']:
@@ -295,18 +298,29 @@ class CRBM:
         #TODO: add adaptive learning rate
 				#TODO: add momentum
 
-        # update the parameters
-        new_motifs = self.motifs + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
-        new_bias = self.bias + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
-        new_c = self.c + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
-        
+
+        # update the parameters and apply sparsity
+        vmotifs = self.hyper_params['momentum'] * self.motif_velocity + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
+        vbias = self.hyper_params['momentum'] * self.bias_velocity + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
+        vc = self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+
         if self.hyper_params['sparsity'] < 1:
             reg_motif,reg_bias = self.gradientSparsityConstraint(D)
+            if self.hyper_params['doublestranded']:
+                reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
             new_motifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
             new_bias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
+
+        new_motifs = self.motifs + vmotifs
+        new_bias = self.bias + vbias
+        new_c = self.c + vc
+
+        
+
         
         #score = self.getDataReconstruction(D)
-        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c)]
+        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                   (self.motif_velocity,vmotifs),(self.bias_velocity,vbias),(self.c_velocity,vc)]
 
         return updates
     
@@ -350,8 +364,6 @@ class CRBM:
         for epoch in range(epochs):
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
-                #ret=1.
-                #print("[average CD: " + str(ret))
             for obs in self.observers:
                 print "Score of " + str(obs.name) + ": " + str(obs.calculateScore())
             print "[Epoch " + str(epoch) + "] done!"
