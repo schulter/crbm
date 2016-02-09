@@ -24,7 +24,7 @@ test_data = np.array([data[i] for i in itest])
 print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
 
 epochs = 900
-cd_k = 5
+cd_k = 1
 learning_rate = 0.00001
 doublestranded=True
 motif_length = 11
@@ -67,17 +67,25 @@ out=learner.computeVgivenH(data)
 #compile computeHgivenV
 computeVgivenH=theano.function([data],out,allow_input_downcast=True)
 
+data=theano.tensor.tensor4(name='data')
+out=learner.meanFreeEnergy(data)
+#compile computeHgivenV
+freeEnergy=theano.function([data],out,allow_input_downcast=True)
+
+freeEnergy(test_data)
 ph,h=computeHgivenV(train_data)
 evh_data,eh_data,ev_data=collectUpdateStatistics(h,train_data)
-for i in range(100):
+for i in range(1):
     pv,v=computeVgivenH(h)
     ph,h=computeHgivenV(v)
 
 evh_model,eh_model,ev_model=collectUpdateStatistics(h,v)
 abs(evh_data-evh_model).sum()
-learner.motifs.set_value(learner.motifs.get_value()+0.0001*(evh_data-evh_model))
-learner.bias.set_value(learner.bias.get_value()+0.0001*(eh_data-eh_model))
-learner.c.set_value(learner.c.get_value()+0.0001*(ev_data-ev_model))
+learner.motifs.set_value(learner.motifs.get_value()+0.01*(evh_data-evh_model))
+learner.bias.set_value(learner.bias.get_value()+0.01*(eh_data-eh_model))
+learner.c.set_value(learner.c.get_value()+0.01*(ev_data-ev_model))
+
+freeEnergy(test_data)
 learner.motifs.get_value()[0,0]
 evh_data[0,0]
 evh_model[0,0]

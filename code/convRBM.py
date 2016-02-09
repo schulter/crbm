@@ -359,43 +359,27 @@ class CRBM:
         prob_of_H, H=self.computeHgivenV(data)
         return T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs),T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
 
-    def getReconFun (self):
-        D = T.tensor4('data')
-        score = self.getDataReconstruction(D)
-        return theano.function([D], score, allow_input_downcast=True)
-    
-    
-    def getDataReconstruction (self, D):
-        [prob_of_H, H] = self.computeHgivenV(D)
-        [prob_of_V,V] = self.computeHgivenV(H)
-        #S_V = self.sampleVisibleLayer(V)
-        sames = V * D # elements are 1 if they have the same letter...
-        count = T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
-        return count
-    
- 
-    def getFreeEnergyFunction (self):
-        D = T.tensor4('data')
-        free_energy = self.calculateFreeEnergy(D)
-        return theano.function([D], free_energy, allow_input_downcast=True)
-    
-    
-    def calculateFreeEnergy (self, D):
-        # firstly, compute hidden part of free energy
-        C = conv.conv2d(D, self.motifs)
+    def meanFreeEnergy (self, D):
+        free_energy=0.0;
+
+        x = conv.conv2d(D, self.motifs)
         bMod = self.bias # to prevent member from being shuffled
         bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias on both sides
-        C = C + bMod
-        hiddenPart = T.sum(T.log(1. + T.exp(C)), axis=1) # dim: N_batch x 1 x N_h after sum over K
-        hiddenPart = T.sum(T.mean(hiddenPart, axis=0)) # mean over all samples and sum over units
+        x=x+bMod
+        pool=self.hyper_params['pooling_factor']
+
+        if self.hyper_params['doublestranded']:
+            x=x.reshape((x.shape[0],x.shape[1]//2,2,x.shape[2],x.shape[3]//pool, pool))
+            free_energy=free_energy - T.sum(T.log(1.+T.sum(T.exp(x),axis=(2,5))))
+        else:
+            x=x.reshape((x.shape[0],x.shape[1],x.shape[2],x.shape[3]//pool, pool))
+            free_energy=free_energy - T.sum(T.log(1.+T.sum(T.exp(x),axis=(4))))
         
-        # compute the visible part
         cMod = self.c
         cMod = cMod.dimshuffle('x', 0, 1, 'x') # make it 4D and broadcastable there
-        visiblePart = T.mean(D * cMod, axis=0) # dim: 1 x 4 x N_v
-        visiblePart = T.sum(visiblePart)
+        free_energy = free_energy - T.sum(D * cMod) 
         
-        return hiddenPart + visiblePart # don't return the negative because it's more difficult to plot
+        return free_energy/(D.shape[0]*D.shape[3])
         
         
     def softmax (self, x):
