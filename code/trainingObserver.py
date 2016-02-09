@@ -64,23 +64,22 @@ class FreeEnergyObserver (TrainingObserver):
 		bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias on both sides
 		
 		C = C + bMod
-		hiddenPart = T.sum(T.log(1. + T.exp(C)), axis=1) # dim: N_batch x 1 x N_h after sum over K
-		hiddenPart = T.sum(T.mean(hiddenPart, axis=0)) # mean over all samples and sum over units
+		hiddenPart = T.mean(T.log(1. + T.exp(C)), axis=1) # dim: N_batch x 1 x N_h after sum over K
+		hiddenPart = T.mean(hiddenPart) # mean over all units and samples
 		
 		# compute the visible part
 		cMod = self.model.c
 		cMod = cMod.dimshuffle('x', 0, 1, 'x') # make it 4D and broadcastable there
-		visiblePart = T.mean(D * cMod, axis=0) # dim: 1 x 4 x N_v
-		visiblePart = T.sum(visiblePart)
+		visiblePart = T.mean(D * cMod) # dim: 1 x 4 x N_v, then mean
 		
 		free_energy = -hiddenPart - visiblePart # don't return the negative because it's more difficult to plot
 		
 		return free_energy
 
 
-class ReconstructionErrorObserver (TrainingObserver):
+class ReconstructionRateObserver (TrainingObserver):
 	
-	def __init__(self, _model, _data, _name="Reconstruction Error Observer"):
+	def __init__(self, _model, _data, _name="Reconstruction Rate Observer"):
 		TrainingObserver.__init__(self, _model, _data, _name)
 		
 	def __getstate__(self):
@@ -97,13 +96,9 @@ class ReconstructionErrorObserver (TrainingObserver):
 			sumOfScores += self.scoringFunction(batchIdx)
 		count = sumOfScores / iterations # mean
 		
-		# got the count of correct letters for all seqs
-		# now, make it percentage of sequence (prob. to get all correct)
-		count /= self.data.shape[3]
-		error = 1 - count # how much error do we have
-		
-		self.scores.append(error)
-		return error
+		# got the mean count of correct letters for all seqs
+		self.scores.append(count)
+		return count
 		
 	
 	def getScoringFunction(self):
@@ -111,21 +106,21 @@ class ReconstructionErrorObserver (TrainingObserver):
 
 		D = T.tensor4('data')
 		index = T.lscalar()
-		score = self.getReconstructionError(D)
+		score = self.getReconstructionRate(D)
 		scoringFun = theano.function([index],
 					 score,
 					 allow_input_downcast=True,
 					 givens={D: dataS[index*self.batchSize:(index+1)*self.batchSize]},
-					 name='ReconstructioinErrorObservation'
+					 name='ReconstructioinRateObservation'
 		)
 		return scoringFun
 
 
-	def getReconstructionError (self, D):
+	def getReconstructionRate (self, D):
 		[prob_of_H, H] = self.model.computeHgivenV(D)
 		[prob_of_V, V] = self.model.computeVgivenH(H)
 		sames = V * D # elements are 1 if they have the same letter...
-		return T.sum(T.mean(sames, axis=0)) # mean over samples, sum over rest
+		return T.mean(sames) # mean over everything (samples, letters, bases)
 
 
 class MotifObserver (TrainingObserver):

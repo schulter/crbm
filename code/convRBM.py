@@ -59,13 +59,21 @@ class CRBM:
         
         # cRBM parameters (2*x to respect both strands of the DNA)
         if self.hyper_params["doublestranded"]:
-            #b = np.random.randn(1, 2*self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
-            b = np.zeros((1, 2*self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
+            if self.hyper_params['biases_to_zero']:
+                b = np.zeros((1, 2*self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
+            else:
+                b = np.random.randn(1, 2*self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
         else:
-            #b = np.random.randn(1, self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
-            b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
-        #c = np.random.rand(1, 4).astype(theano.config.floatX)
-        c = np.zeros((1, 4)).astype(theano.config.floatX)
+            if self.hyper_params['biases_to_zero']:
+                b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
+            else:
+                b = np.random.randn(1, self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+        
+        if self.hyper_params['biases_to_zero']:
+            c = np.zeros((1, 4)).astype(theano.config.floatX)
+        else:
+            c = np.random.rand(1, 4).astype(theano.config.floatX)
+
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
 
@@ -73,8 +81,7 @@ class CRBM:
         self.theano_rng = RS(seed=1234)
         self.params = [self.motifs, self.bias, self.c]
         
-        self.debug = False
-        self.setToZero = False
+        self.debug = self.hyper_params['verbose']
         self.observers = []
         self.motif_velocity=theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX), name='velocity_of_W',borrow=True)
         self.bias_velocity=theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX), name='velocity_of_bias',borrow=True)
@@ -100,11 +107,16 @@ class CRBM:
             print "New motifs must be a 4D matrix with dims: (K x 1 x numOfLetters(4) x numOfKMers)"
             return
 
-        self.hyper_params['number_of_motifs'] = customKernels.shape[0]
+        if self.hyper_params['doublestranded']:
+            assert (customKernels.shape[0] % 2 == 0), "doublestranded option with odd number of kernels not permitted"
+            self.hyper_params['number_of_motifs'] = customKernels.shape[0] / 2
+        else:
+            self.hyper_params['number_of_motifs'] = customKernels.shape[0]
+
         self.hyper_params['motif_length'] = customKernels.shape[3]
         numMotifs = self.hyper_params['number_of_motifs']
         
-        if self.setToZero:
+        if self.hyper_params['biases_to_zero']:
             b = np.zeros((1, numMotifs)).astype(theano.config.floatX)
             c = np.zeros((1, 4)).astype(theano.config.floatX)
         else:
@@ -285,20 +297,26 @@ class CRBM:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
         #TODO: add adaptive learning rate
 				#TODO: add momentum
-				#TODO: add sparsity constraint
-        reg_motif,reg_bias = self.gradientSparsityConstraint(D)
-        if self.hyper_params['doublestranded']:
-            reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
 
-        # update the parameters
 
-        vmotifs=self.hyper_params['momentum']*self.motif_velocity + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model -self.hyper_params['sparsity']*reg_motif)
-        vbias=self.hyper_params['momentum']*self.bias_velocity +self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model -self.hyper_params['sparsity']*reg_bias)
-        vc=self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * ((G_c_data - G_c_model))
+        # update the parameters and apply sparsity
+        vmotifs = self.hyper_params['momentum'] * self.motif_velocity + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
+        vbias = self.hyper_params['momentum'] * self.bias_velocity + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
+        vc = self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+
+        if self.hyper_params['sparsity'] < 1:
+            reg_motif,reg_bias = self.gradientSparsityConstraint(D)
+            if self.hyper_params['doublestranded']:
+                reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
+            new_motifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
+            new_bias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
         new_c = self.c + vc
+
+        
+
         
         #score = self.getDataReconstruction(D)
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
@@ -357,7 +375,9 @@ class CRBM:
     def gradientSparsityConstraint(self, data):
         #get expected[H|V]
         prob_of_H, H=self.computeHgivenV(data)
-        return T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs),T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
+        gradKernels = T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.motifs)
+        gradBias = T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
+        return gradKernels, gradBias
 
     def meanFreeEnergy (self, D):
         free_energy=0.0;
