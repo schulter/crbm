@@ -17,15 +17,15 @@ import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 2
+epochs = 100
 cd_k = 1
-learning_rate = 0.001
-doublestranded=False
+learning_rate = 0.0001
+doublestranded = False
 motif_length = 11
 number_of_motifs = 20
 batch_size = 100
-pooling_factor = 2
-sparsity=0.001 # regularization parameter
+pooling_factor = 1
+sparsity=1 # regularization parameter
 rho=0.001 # threshold for motif hit frequency
 
 
@@ -38,7 +38,7 @@ validationSize = 500
 
 # read the data and split it
 seqReader = dataRead.SeqReader()
-allSeqs = seqReader.readSeqsInDirectory('../../data/')
+allSeqs = seqReader.readSeqsInDirectory('../data/')
 
 if USE_WHOLE_DATA:
 	data = allSeqs
@@ -67,12 +67,14 @@ hyper_params = {'number_of_motifs':number_of_motifs,
 				'motif_length':motif_length,
 				'learning_rate':learning_rate,
 				'doublestranded':doublestranded,
+				'biases_to_zero':False,
 				'pooling_factor':pooling_factor,
 				'epochs':epochs,
 				'cd_k':cd_k,
 				'sparsity':sparsity,
 				'rho':rho,
-				'batch_size':batch_size
+				'batch_size':batch_size,
+				'verbose':False
 }
 learner = CRBM(hyperParams=hyper_params)
 
@@ -83,9 +85,9 @@ free_energy_train_observer = observer.FreeEnergyObserver(learner, validationData
 learner.addObserver(free_energy_train_observer)
 
 # add the observers for reconstruction error (test and train)
-reconstruction_observer = observer.ReconstructionErrorObserver(learner, testingData, "Reconstruction Error Testing Observer")
+reconstruction_observer = observer.ReconstructionRateObserver(learner, testingData, "Reconstruction Error Testing Observer")
 learner.addObserver(reconstruction_observer)
-reconstruction_observer_train = observer.ReconstructionErrorObserver(learner, validationData, "Reconstruction Error Training Observer")
+reconstruction_observer_train = observer.ReconstructionRateObserver(learner, validationData, "Reconstruction Error Training Observer")
 learner.addObserver(reconstruction_observer_train)
 
 # add the observer of the motifs during training (to look at them afterwards)
@@ -113,14 +115,13 @@ learner.saveModel(file_name)
 # plot
 plt.subplot(2,1,1)
 plt.ylabel('Free energy function')
-plt.title(str(epochs) + " epo " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+plt.title(learning_rate + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
 plt.plot(free_energy_observer.scores)
 plt.plot(free_energy_train_observer.scores)
 
 plt.subplot(2,1,2)
-plt.ylabel('Reconstruction error on dataset')
+plt.ylabel('Reconstruction rate on dataset')
 plt.xlabel('Number Of Epoch')
-plt.title('Reconstruction Error')
 plt.plot(reconstruction_observer.scores)
 plt.plot(reconstruction_observer_train.scores)
 
