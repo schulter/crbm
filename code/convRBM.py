@@ -308,8 +308,8 @@ class CRBM:
             reg_motif,reg_bias = self.gradientSparsityConstraint(D)
             if self.hyper_params['doublestranded']:
                 reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
-            new_motifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
-            new_bias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
+            vmotifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
+            vbias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
