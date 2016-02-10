@@ -299,17 +299,19 @@ class CRBM:
 				#TODO: add momentum
 
 
-        # update the parameters and apply sparsity
-        vmotifs = self.hyper_params['momentum'] * self.motif_velocity + self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
-        vbias = self.hyper_params['momentum'] * self.bias_velocity + self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
-        vc = self.hyper_params['momentum']*self.c_velocity + self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+        mu=self.hyper_params['momentum']
+        alpha=self.hyper_params['learning_rate']
+        sp=self.hyper_params['sparsity']
 
-        if self.hyper_params['sparsity'] < 1:
-            reg_motif,reg_bias = self.gradientSparsityConstraint(D)
-            if self.hyper_params['doublestranded']:
-                reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
-            new_motifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
-            new_bias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
+        reg_motif,reg_bias = self.gradientSparsityConstraint(D)
+        if self.hyper_params['doublestranded']:
+           reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
+
+        # update the parameters and apply sparsity
+        vmotifs = mu * self.motif_velocity + alpha* (G_motif_data - G_motif_model-sp*reg_motif)
+        vbias = mu * self.bias_velocity + alhpa * (G_bias_data - G_bias_model-sp*reg_bias)
+        vc = mu*self.c_velocity + alpha* (G_c_data - G_c_model)
+
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
