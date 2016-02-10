@@ -59,20 +59,11 @@ class CRBM:
         
         # cRBM parameters (2*x to respect both strands of the DNA)
         if self.hyper_params["doublestranded"]:
-            if self.hyper_params['biases_to_zero']:
-                b = np.zeros((1, 2*self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
-            else:
-                b = np.random.randn(1, 2*self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+            b = np.zeros((1, 2*self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         else:
-            if self.hyper_params['biases_to_zero']:
-                b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
-            else:
-                b = np.random.randn(1, self.hyper_params['number_of_motifs']).astype(theano.config.floatX)
+            b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         
-        if self.hyper_params['biases_to_zero']:
-            c = np.zeros((1, 4)).astype(theano.config.floatX)
-        else:
-            c = np.random.rand(1, 4).astype(theano.config.floatX)
+        c = np.zeros((1, 4)).astype(theano.config.floatX)
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
@@ -116,13 +107,6 @@ class CRBM:
         self.hyper_params['motif_length'] = customKernels.shape[3]
         numMotifs = self.hyper_params['number_of_motifs']
         
-        if self.hyper_params['biases_to_zero']:
-            b = np.zeros((1, numMotifs)).astype(theano.config.floatX)
-            c = np.zeros((1, 4)).astype(theano.config.floatX)
-        else:
-            b = np.random.rand(1, numMotifs).astype(theano.config.floatX)
-            c = np.random.rand(1, 4).astype(theano.config.floatX)
-
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
         self.motifs = theano.shared(value=customKernels.astype(theano.config.floatX))
@@ -359,12 +343,12 @@ class CRBM:
         print "Start training the model..."
         start = time.time()
         for obs in self.observers:
-            print "Initial Score of " + str(obs.name) + ": " + str(obs.calculateScore())
+					print str(obs.name) +": " + str(obs.calculateScore())
         for epoch in range(epochs):
             for batchIdx in range(itPerEpoch):
                 trainingFun(batchIdx)
             for obs in self.observers:
-                print "Score of " + str(obs.name) + ": " + str(obs.calculateScore())
+							print str(obs.name) +": "+ str(obs.calculateScore())
             print "[Epoch " + str(epoch) + "] done!"
 
         # done with training
