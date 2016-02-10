@@ -312,12 +312,9 @@ class CRBM:
         vbias = mu * self.bias_velocity + alhpa * (G_bias_data - G_bias_model-sp*reg_bias)
         vc = mu*self.c_velocity + alpha* (G_c_data - G_c_model)
 
-
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
         new_c = self.c + vc
-
-        
 
         
         #score = self.getDataReconstruction(D)
