@@ -309,7 +309,7 @@ class CRBM:
 
         # update the parameters and apply sparsity
         vmotifs = mu * self.motif_velocity + alpha* (G_motif_data - G_motif_model-sp*reg_motif)
-        vbias = mu * self.bias_velocity + alhpa * (G_bias_data - G_bias_model-sp*reg_bias)
+        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
         vc = mu*self.c_velocity + alpha* (G_c_data - G_c_model)
 
         new_motifs = self.motifs + vmotifs
