@@ -308,8 +308,8 @@ class CRBM:
             reg_motif,reg_bias = self.gradientSparsityConstraint(D)
             if self.hyper_params['doublestranded']:
                 reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
-            new_motifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
-            new_bias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
+            vmotifs -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity'] * reg_motif
+            vbias -= self.hyper_params['learning_rate'] * self.hyper_params['sparsity']*reg_bias
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
@@ -379,6 +379,28 @@ class CRBM:
         gradBias = T.grad(T.mean(T.nnet.softplus(T.mean(prob_of_H,axis=(0,2,3))-self.hyper_params['rho'])), self.bias)
         return gradKernels, gradBias
 
+    def meanFreeEnergy (self, D):
+        free_energy=0.0;
+
+        x = conv.conv2d(D, self.motifs)
+        bMod = self.bias # to prevent member from being shuffled
+        bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias on both sides
+        x=x+bMod
+        pool=self.hyper_params['pooling_factor']
+
+        if self.hyper_params['doublestranded']:
+            x=x.reshape((x.shape[0],x.shape[1]//2,2,x.shape[2],x.shape[3]//pool, pool))
+            free_energy=free_energy - T.sum(T.log(1.+T.sum(T.exp(x),axis=(2,5))))
+        else:
+            x=x.reshape((x.shape[0],x.shape[1],x.shape[2],x.shape[3]//pool, pool))
+            free_energy=free_energy - T.sum(T.log(1.+T.sum(T.exp(x),axis=(4))))
+        
+        cMod = self.c
+        cMod = cMod.dimshuffle('x', 0, 1, 'x') # make it 4D and broadcastable there
+        free_energy = free_energy - T.sum(D * cMod) 
+        
+        return free_energy/(D.shape[0]*D.shape[3])
+        
         
     def softmax (self, x):
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
