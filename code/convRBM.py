@@ -2,7 +2,8 @@
 # Theano imports
 import theano
 import theano.tensor as T
-import theano.tensor.nnet.conv as conv
+from theano.tensor.nnet import conv2d as conv
+#from theano.sandbox.cuda.dnn import dnn_conv
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
 
@@ -63,6 +64,7 @@ class CRBM:
         else:
             b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         
+        b=b
         c = np.zeros((1, 4)).astype(theano.config.floatX)
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
@@ -147,8 +149,7 @@ class CRBM:
 
     def computeHgivenV (self, data):
         # calculate filter(D, W) + b
-        out = conv.conv2d(data, self.motifs[:,:,::-1,::-1]) # cross-correlation
-        #out = conv.conv2d(data, self.motifs, filter_flip=False)
+        out = conv(data, self.motifs, filter_flip=False)
         if self.debug:
             out = theano.printing.Print('Convolution result forward: ')(out)
         bMod = self.bias
@@ -174,11 +175,10 @@ class CRBM:
 
 
     def computeVgivenH (self, H_sample):
-        # first, compute P(V | H) via convolution
-        # P(V | H) = softmax( conv(H, W) + c )
-        # dimshuffle the motifs to have K as channels (will be summed automatically)
+
         W = self.motifs.dimshuffle(1, 0, 2, 3)
-        C = conv.conv2d(H_sample, W, border_mode='full')
+        C = conv(H_sample, W, border_mode='full',filter_flip=True)
+        
         if self.debug:
             C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
         out = T.sum(C, axis=1, keepdims=True) # sum over all K
@@ -195,7 +195,6 @@ class CRBM:
         pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
         V_ = self.theano_rng.multinomial(n=1,pvals=pV_).astype(theano.config.floatX)
         V = V_.reshape((prob_of_V.shape[0], 1, prob_of_V.shape[3], prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
-        #V = V.astype(theano.config.floatX)
         if self.debug:
             V = theano.printing.Print('Visible Sample: ')(V)
         return [prob_of_V,V]
@@ -222,8 +221,8 @@ class CRBM:
     	  #reshape input 
         data=data.dimshuffle(1,0,2,3)
         prob_of_H=prob_of_H.dimshuffle(1,0,2,3)
-        avh=conv.conv2d(data,prob_of_H[:,:,:,::-1],border_mode="valid")
-        avh=avh/ T.prod(2*prob_of_H.shape[1:])
+        avh=conv(data,prob_of_H,border_mode="valid", filter_flip=False)
+        avh=avh/ T.prod(prob_of_H.shape[1:])
         avh=avh.dimshuffle(1,0,2,3).astype(theano.config.floatX)
 
         return avh
@@ -250,14 +249,11 @@ class CRBM:
         average_H=self.collectHStatistics(prob_of_H)
         average_V=self.collectVStatistics(data)
 
-        # make the kernels respect the strand structure
-        if self.hyper_params['doublestranded']:
-            average_VH,average_H = self.matchWeightchangeForComplementaryMotifs(average_VH,average_H)
 
         return average_VH, average_H, average_V
 
     
-    def updateWeightsOnMinibatch (self, D, numOfCDs):
+    def updateWeightsOnMinibatch (self, D, num_of_cds):
         # calculate the data gradient for weights (motifs), bias and c
         [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
         if self.debug:
@@ -270,7 +266,7 @@ class CRBM:
         # calculate model probs
         H_given_model = H_given_data
         #TODO: PCD
-        for i in range(numOfCDs):
+        for i in range(num_of_cds):
             prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
             prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
         
@@ -288,8 +284,8 @@ class CRBM:
         sp=self.hyper_params['sparsity']
 
         reg_motif,reg_bias = self.gradientSparsityConstraint(D)
-        if self.hyper_params['doublestranded']:
-           reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
+        #if self.hyper_params['doublestranded']:
+        #   reg_motif,reg_bias = self.matchWeightchangeForComplementaryMotifs(reg_motif,reg_bias)
 
         # update the parameters and apply sparsity
         vmotifs = mu * self.motif_velocity + alpha* (G_motif_data - G_motif_model-sp*reg_motif)
@@ -300,6 +296,8 @@ class CRBM:
         new_bias = self.bias + vbias
         new_c = self.c + vc
 
+        if self.hyper_params['doublestranded']:
+            new_motifs,new_bias = self.matchWeightchangeForComplementaryMotifs(new_motifs,new_bias)
         
         #score = self.getDataReconstruction(D)
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
@@ -326,7 +324,7 @@ class CRBM:
         train_set = theano.shared(value=trainData, borrow=True, name='trainData')
         index = T.lscalar()
         D = T.tensor4('data')
-        updates = self.updateWeightsOnMinibatch(D, self.hyper_params['cd_k'])
+        updates = self.updateWeightsOnMinibatch(D,self.hyper_params['cd_k'])
         trainingFun = theano.function(
               [index],
               None,
@@ -365,7 +363,7 @@ class CRBM:
     def meanFreeEnergy (self, D):
         free_energy=0.0;
 
-        x = conv.conv2d(D, self.motifs)
+        x = conv(D, self.motifs, filter_flip=False)
         bMod = self.bias # to prevent member from being shuffled
         bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias on both sides
         x=x+bMod
