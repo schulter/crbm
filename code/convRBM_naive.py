@@ -10,6 +10,9 @@ class NaiveCRBM:
 
     def __init__ (self, hyperParams):
         self.hyper_params = hyperParams
+        self.motifs = np.zeros((2 * self.hyper_params['number_of_motifs'], 1, 4, self.hyper_params['motif_length']))
+        self.bias = np.zeros((1, self.hyper_params['number_of_motifs']))
+        self.c = np.zeros((1,4))
         
     def setMotifs (self, motifs_):
         self.motifs = motifs_
@@ -168,6 +171,57 @@ class NaiveCRBM:
         eh=eh/2.
 
         return evh,eh
+
+
+    def updateWeightsOnMinibatch (self, D, numOfCDs):
+        # calculate the data gradient for weights (motifs) and bias
+        [P_H_data, H_data] = self.computeHgivenV(D)
+        if self.hyper_params['verbose']:
+            print "Hidden Layer Probabilities:"
+            print P_H_data
+            print "Hidden Layer Sample:"
+            print H_data
+
+        # calculate data gradients
+        [G_motif_data, G_bias_data, G_c_data] = self.collectUpdateStatistics(P_H_data, D)
+
+        if self.hyper_params['verbose']:
+            print "Data gradient for motifs"
+            print G_motif_data
+
+        # calculate model probs
+        H = H_data
+        for i in range(numOfCDs):
+            [P_V, V] = self.computeVgivenH(H)
+            if self.hyper_params['verbose']:
+                print "Visible Sample for CD " + str(i)
+                print V
+            [P_H_model, H] = self.computeHgivenV(V)
+
+        # compute the model gradients
+        [G_motif_model, G_bias_model, G_c_model] = self.collectUpdateStatistics(P_H_model, V)
+
+        if self.hyper_params['verbose']:
+            print "Model gradient for motifs:"
+            print G_motif_model
         
+        # update the parameters
+        grad_motifs = self.hyper_params['learning_rate'] * (G_motif_data - G_motif_model)
+        grad_bias = self.hyper_params['learning_rate'] * (G_bias_data - G_bias_model)
+        grad_c = self.hyper_params['learning_rate'] * (G_c_data - G_c_model)
+
+        self.motifs += grad_motifs
+        self.bias += grad_bias
+        self.c += grad_c
+
+
+    def trainModel (self, trainData):
+        batchSize = self.hyper_params['batch_size']
+        iterations = trainData.shape[0] / batchSize
+        for epoch in range(self.hyper_params['epochs']):
+            for batchIdx in range(iterations):
+                self.updateWeightsOnMinibatch(trainData[batchIdx*batchSize:(batchIdx+1)*batchSize], self.hyper_params['cd_k'])
+
+
     def softmax (self, x):
         return np.exp(x) / np.exp(x).sum(axis=2, keepdims=True)
