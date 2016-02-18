@@ -58,23 +58,7 @@ class FreeEnergyObserver (TrainingObserver):
 
 
 	def getFreeEnergy (self, D):
-		# firstly, compute hidden part of free energy
-		C = conv.conv2d(D, self.model.motifs)
-		bMod = self.model.bias # to prevent member from being shuffled
-		bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias on both sides
-		
-		C = C + bMod
-		hiddenPart = T.mean(T.log(1. + T.exp(C)), axis=1) # dim: N_batch x 1 x N_h after sum over K
-		hiddenPart = T.mean(hiddenPart) # mean over all units and samples
-		
-		# compute the visible part
-		cMod = self.model.c
-		cMod = cMod.dimshuffle('x', 0, 1, 'x') # make it 4D and broadcastable there
-		visiblePart = T.mean(D * cMod) # dim: 1 x 4 x N_v, then mean
-		
-		free_energy = -hiddenPart - visiblePart # don't return the negative because it's more difficult to plot
-		
-		return free_energy
+		return self.model.meanFreeEnergy(D)
 
 
 class ReconstructionRateObserver (TrainingObserver):
