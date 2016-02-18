@@ -1,4 +1,4 @@
-import matplotlib
+#import matplotlib
 #matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 #from sklearn.cross_validation import train_test_split
@@ -17,15 +17,15 @@ import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 100
-cd_k = 1
+epochs = 500
+cd_k = 2
 learning_rate = 0.01
 doublestranded = False
 motif_length = 11
 number_of_motifs = 30
-batch_size = 100
+batch_size = 300
 pooling_factor = 1
-sparsity=0 # regularization parameter
+sparsity = 0.3 # regularization parameter
 rho=0.001 # threshold for motif hit frequency
 
 train_test_ratio = 0.01
@@ -101,33 +101,47 @@ motif_hit_observer = observer.MotifHitObserver(learner, validationData)
 learner.addObserver(motif_hit_observer)
 print "Data mat shape: " + str(trainingData.shape)
 
+# HERE, THE ACTUAL WORK IS DONE.
+# We want to save the model, even when the script is terminated via Ctrl-C.
 
-# perform training
-start = time.time()
-learner.trainModel(trainingData)
-print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
-# save trained model to file
-date_string = datetime.now().strftime("%Y_%m_%d_%H_%M")
-os.mkdir('../../training/' + date_string)
-file_name = "../../training/" + date_string + "/model.pkl"
-print "Saving model to " + str(file_name)
-learner.saveModel(file_name)
+def saveModelAndPlot():
+	# save trained model to file
+	date_string = datetime.now().strftime("%Y_%m_%d_%H_%M")
+	os.mkdir('../../training/' + date_string)
+	file_name = "../../training/" + date_string + "/model.pkl"
+	print "Saving model to " + str(file_name)
+	learner.saveModel(file_name)
+	
+	# plot
+	plt.subplot(2,1,1)
+	plt.ylabel('Free energy function')
+	plt.title(str(hyper_params['learning_rate']) + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
 
-# plot
-plt.subplot(2,1,1)
-plt.ylabel('Free energy function')
-plt.title(str(hyper_params['learning_rate']) + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+	plt.plot(free_energy_observer.scores)
+	plt.plot(free_energy_train_observer.scores)
 
-plt.plot(free_energy_observer.scores)
-plt.plot(free_energy_train_observer.scores)
+	plt.subplot(2,1,2)
+	plt.ylabel('Reconstruction rate on dataset')
+	plt.xlabel('Number Of Epoch')
+	plt.plot(reconstruction_observer.scores)
+	plt.plot(reconstruction_observer_train.scores)
 
-plt.subplot(2,1,2)
-plt.ylabel('Reconstruction rate on dataset')
-plt.xlabel('Number Of Epoch')
-plt.plot(reconstruction_observer.scores)
-plt.plot(reconstruction_observer_train.scores)
+	# save plot to file
+	file_name_plot = "../../training/" + date_string + "/errorPlot.png"
+	plt.savefig(file_name_plot)
 
-# save plot to file
-file_name_plot = "../../training/" + date_string + "/errorPlot.png"
-plt.savefig(file_name_plot)
+
+try:
+	# perform training
+	start = time.time()
+	learner.trainModel(trainingData)
+	print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
+
+except KeyboardInterrupt:
+	saveModelAndPlot()
+	print "You interrupted the program. It will save the model and exit."
+	raise
+
+
+saveModelAndPlot()
