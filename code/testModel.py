@@ -106,7 +106,7 @@ print "Data mat shape: " + str(trainingData.shape)
 icObserver = observer.InformationContentObserver(learner)
 learner.addObserver(icObserver)
 
-medianICObserver = observer.MedianICObserver(learner, trainingData)
+medianICObserver = observer.MedianICObserver(learner)
 learner.addObserver(medianICObserver)
 
 # HERE, THE ACTUAL WORK IS DONE.

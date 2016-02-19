@@ -104,7 +104,7 @@ class ReconstructionRateObserver (TrainingObserver):
 		[prob_of_H, H] = self.model.computeHgivenV(D)
 		[prob_of_V, V] = self.model.computeVgivenH(H)
 		sames = V * D # elements are 1 if they have the same letter...
-		return T.mean(sames) # mean over everything (samples, letters, bases)
+		return T.mean(T.sum(sames, axis=2)) # sum over letters, mean over rest
 
 
 class MotifObserver (TrainingObserver):
@@ -235,7 +235,7 @@ class MedianICObserver (TrainingObserver):
 		return state
 	
 	def calculateScore (self):
-		meanIC = self.scoringFunction(batchIdx)
+		meanIC = self.scoringFunction(self.model.motifs.get_value())
 		self.scores.append(meanIC)
 		return meanIC
 
@@ -251,8 +251,8 @@ class MedianICObserver (TrainingObserver):
 		return scoringFun
 
 
-	def getMedianIC (self, D):
-		pwm = self.model.softmax(self.model.motifs)
+	def getMedianIC (self, M):
+		pwm = self.model.softmax(M)
 		entropy = -pwm * T.log2(pwm)
 		entropy = T.sum(entropy, axis=2) # sum over letters
 		return T.log2(self.model.motifs.shape[2]) - T.mean(T.sort(entropy, axis=2)[:,:,entropy.shape[2]//2])
