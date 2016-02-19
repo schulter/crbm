@@ -20,7 +20,7 @@ allHyperParams = [
 'learning_rate':0.5,
 'doublestranded':False,
 'pooling_factor':5,
-'epochs':1,
+'epochs':100,
 'cd_k':5,
 'sparsity':1.01,
 'rho':0.05,
@@ -34,7 +34,7 @@ allHyperParams = [
 'learning_rate':0.5,
 'doublestranded':False,
 'pooling_factor':5,
-'epochs':1,
+'epochs':100,
 'cd_k':5,
 'sparsity':1.01,
 'rho':0.05,
@@ -127,7 +127,8 @@ def saveModelAndPlot():
 	# plot
 	plt.subplot(2,1,1)
 	plt.ylabel('Free energy function')
-	plt.title(str(hyper_params['learning_rate']) + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+	title = "%f lr %d kmers %d numOfMotifs %d cd_k" % (hyper_params['learning_rate'], hyper_params['motif_length'], hyper_params['number_of_motifs'], hyper_params['cd_k'])
+	plt.title(title)
 
 	plt.plot(getObserver(learner, "free energy testing").scores)
 	plt.plot(getObserver(learner, "free energy training").scores)
