@@ -14,20 +14,65 @@ import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 300
-cd_k = 5
-learning_rate = 0.5
-doublestranded = False
-motif_length = 11
-number_of_motifs = 100
-batch_size = 100
-pooling_factor = 5
-sparsity = 1.01 # regularization parameter
-rho=0.005 # threshold for motif hit frequency
+allHyperParams = [
+{'number_of_motifs':100,
+'motif_length':11,
+'learning_rate':0.5,
+'doublestranded':False,
+'pooling_factor':5,
+'epochs':1,
+'cd_k':5,
+'sparsity':1.01,
+'rho':0.05,
+'batch_size':100,
+'verbose':False,
+'cd_method':'pcd',
+'momentum':0.9
+},
+{'number_of_motifs':150,
+'motif_length':11,
+'learning_rate':0.5,
+'doublestranded':False,
+'pooling_factor':5,
+'epochs':1,
+'cd_k':5,
+'sparsity':1.01,
+'rho':0.05,
+'batch_size':100,
+'verbose':False,
+'cd_method':'pcd',
+'momentum':0.9
+},
+{'number_of_motifs':300,
+'motif_length':11,
+'learning_rate':0.5,
+'doublestranded':False,
+'pooling_factor':5,
+'epochs':100,
+'cd_k':5,
+'sparsity':1.01,
+'rho':0.05,
+'batch_size':100,
+'verbose':False,
+'cd_method':'pcd',
+'momentum':0.9
+},
+{'number_of_motifs':500,
+'motif_length':11,
+'learning_rate':0.5,
+'doublestranded':False,
+'pooling_factor':5,
+'epochs':100,
+'cd_k':5,
+'sparsity':1.01,
+'rho':0.05,
+'batch_size':100,
+'verbose':False,
+'cd_method':'pcd',
+'momentum':0.9
+}]
 
 train_test_ratio = 0.1
-
-USE_WHOLE_DATA = True
 verificationSize = 500
 ########################################################
 
@@ -104,12 +149,7 @@ def saveModelAndPlot():
 print "Reading the data..."
 start = time.time()
 seqReader = dataRead.SeqReader()
-allSeqs = seqReader.readOneHotFromFile('../data/seq.onehot.gz')
-
-if USE_WHOLE_DATA:
-	data = allSeqs
-else:
-	data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(2000)]
+data = seqReader.readOneHotFromFile('../data/seq.onehot.gz')
 
 # split
 per=np.random.permutation(len(data))
@@ -123,45 +163,23 @@ trainingData = np.array([data[i] for i in itrain])
 testingData = np.array([data[i] for i in itest])
 verificationData = np.array([data[i] for i in veri])
 
-print trainingData.shape
-print allSeqs[0].shape
 print "Data successfully read in " + str((time.time()-start)) + " seconds."
 print "Train set size: " + str(len(itrain))
 print "Test set size: " + str(len(itest))
 
-# construct the model
-
-hyper_params = {'number_of_motifs':number_of_motifs,
-				'motif_length':motif_length,
-				'learning_rate':learning_rate,
-				'doublestranded':doublestranded,
-				'biases_to_zero':False,
-				'pooling_factor':pooling_factor,
-				'epochs':epochs,
-				'cd_k':cd_k,
-				'sparsity':sparsity,
-				'rho':rho,
-				'batch_size':batch_size,
-				'verbose':False,
-				'cd_method':'pcd',
-				'momentum':0.9 # use 0.0 to disable momentum
-}
-
 
 # HERE, THE ACTUAL WORK IS DONE.
-# We want to save the model, even when the script is terminated via Ctrl-C.
+for hyper_params in allHyperParams:
+	learner = buildModelWithObservers(hyper_params, testingData, verificationData)
+	learner.printHyperParams()
 
-learner = buildModelWithObservers(hyper_params, testingData, verificationData)
-learner.printHyperParams()
+	try: # We want to save the model, even when the script is terminated via Ctrl-C.
+		start = time.time()
+		learner.trainModel(trainingData)
+		print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
 
-try:
-	# perform training
-	start = time.time()
-	learner.trainModel(trainingData)
-	print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."
+	except KeyboardInterrupt:
+		saveModelAndPlot()
+		print "You interrupted the program. It will save the model and exit."
 
-except KeyboardInterrupt:
 	saveModelAndPlot()
-	print "You interrupted the program. It will save the model and exit."
-
-saveModelAndPlot()
