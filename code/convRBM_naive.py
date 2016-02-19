@@ -55,14 +55,31 @@ class NaiveCRBM:
         for iseq in range(data.shape[0]):
             for ivbin in range(vertical_bins):
                 for ihbin in range(horizontal_bins):
+                    
+                    # first, get the denominator
                     denominator = 1.0
                     for iv in range(vertical_pooling_factor):
                         for ih in range(horizontal_pooling_factor):
                 	      	 denominator+=prob_of_H[iseq,ivbin*vertical_pooling_factor+iv,0,ihbin*horizontal_pooling_factor+ih]
+                    
+                    # now we can do the softmax in there
+                    arr_of_probs = []
                     for iv in range(vertical_pooling_factor):
                         for ih in range(horizontal_pooling_factor):
-                	      	 prob_of_H[iseq,ivbin*vertical_pooling_factor+iv,0,ihbin*horizontal_pooling_factor+ih]=\
-                	      	 prob_of_H[iseq,ivbin*vertical_pooling_factor+iv,0,ihbin*horizontal_pooling_factor+ih]/denominator
+                            k_pos = ivbin*vertical_pooling_factor+iv
+                            pool_pos = ihbin*horizontal_pooling_factor+ih
+                            softmax_val = prob_of_H[iseq,k_pos,0,pool_pos]/denominator
+                            prob_of_H[iseq,k_pos,0,pool_pos] = softmax_val
+                            arr_of_probs.append(softmax_val)
+                    
+                    # and at last, do the sampling
+                    arr_of_probs.append(1./denominator) #last option means no one is on
+                    sample = np.random.multinomial(n=1, pvals=np.array(arr_of_probs))
+                    pos = np.argmax(sample)
+                    if pos < len(sample)-1: # otherwise, the No-Unit-On option was chosen
+                        k_pos = ivbin*vertical_pooling_factor + (pos % vertical_pooling_factor)
+                        pool_pos = ihbin*horizontal_pooling_factor + (pos // horizontal_pooling_factor)
+                        H[iseq,k_pos,0,pool_pos] = 1 # set sample
                         
         return [prob_of_H,H]
 
@@ -91,7 +108,10 @@ class NaiveCRBM:
         prob_of_V = self.softmax(v_input)
         
         V = np.zeros(v_input.shape)
-        
+        for sample in range(prob_of_V.shape[0]):
+            for col in range(prob_of_V.shape[3]):
+                V[sample,0,:,col] = np.random.multinomial(n=1,pvals=prob_of_V[sample,0,:,col],size=1)
+
         return [prob_of_V, V]
         
 
@@ -117,17 +137,16 @@ class NaiveCRBM:
         return vh
 
     def collectVStatistics(self, data):
-    	  #reshape input 
+        #reshape input
         c=np.zeros((1,4))
         for iseq in range(data.shape[0]):
             for ipos in range(data.shape[3]):
-							c[0,:]+=data[iseq,0,:,ipos]+data[iseq,0,::-1,ipos]
-
+                c[0,:] += data[iseq,0,:,ipos] + data[iseq,0,::-1,ipos]
         c=2.*c/np.sum(c)
         return c
 
     def collectHStatistics(self, hidden):
-    	  #reshape input 
+        #reshape input 
         K=self.hyper_params['number_of_motifs']
         if self.hyper_params['doublestranded']:
             K=2*K
@@ -142,7 +161,7 @@ class NaiveCRBM:
         return b
 
     def collectUpdateStatistics(self, prob_of_H, data):
-    	  #reshape input 
+        #reshape input 
 
         average_VH=self.collectVHStatistics(prob_of_H, data)
         average_H=self.collectHStatistics(prob_of_H)
@@ -219,9 +238,14 @@ class NaiveCRBM:
         batchSize = self.hyper_params['batch_size']
         iterations = trainData.shape[0] / batchSize
         for epoch in range(self.hyper_params['epochs']):
+            #print "Params at beginning of epoch [" + str(epoch) + "]"
+            #print self.motifs
+            #print self.bias
+            #print self.c
             for batchIdx in range(iterations):
                 self.updateWeightsOnMinibatch(trainData[batchIdx*batchSize:(batchIdx+1)*batchSize], self.hyper_params['cd_k'])
-
+            
+            print "[Epoch " + str(epoch) + "] done!"
 
     def softmax (self, x):
         return np.exp(x) / np.exp(x).sum(axis=2, keepdims=True)
