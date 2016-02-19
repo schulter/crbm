@@ -1,7 +1,4 @@
-#import matplotlib
-#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-#from sklearn.cross_validation import train_test_split
 
 from convRBM import CRBM
 import getData as dataRead
@@ -31,12 +28,81 @@ rho=0.005 # threshold for motif hit frequency
 train_test_ratio = 0.1
 
 USE_WHOLE_DATA = True
-validationSize = 500
+verificationSize = 500
 ########################################################
+
+def getObserver(model, title):
+	for obs in model.observers:
+		if title.lower() in obs.name.lower():
+			return obs
+	return None
+
+
+def buildModelWithObservers (hyper_params, testingData, verificationData):
+	model = CRBM(hyperParams=hyper_params)
+
+	# add the observers for free energy (test and train)
+	free_energy_observer = observer.FreeEnergyObserver(model, testingData, "Free Energy Testing Observer")
+	model.addObserver(free_energy_observer)
+	free_energy_train_observer = observer.FreeEnergyObserver(model, verificationData, "Free Energy Training Observer")
+	model.addObserver(free_energy_train_observer)
+
+	# add the observers for reconstruction error (test and train)
+	reconstruction_observer = observer.ReconstructionRateObserver(model, testingData, "Reconstruction Rate Testing Observer")
+	model.addObserver(reconstruction_observer)
+	reconstruction_observer_train = observer.ReconstructionRateObserver(model, verificationData, "Reconstruction Rate Training Observer")
+	model.addObserver(reconstruction_observer_train)
+
+	# add the observer of the motifs during training (to look at them afterwards)
+	param_observer = observer.ParameterObserver(model, None)
+	model.addObserver(param_observer)
+
+	# add the motif hit scanner
+	motif_hit_observer = observer.MotifHitObserver(model, testingData)
+	model.addObserver(motif_hit_observer)
+
+	# add IC observers
+	icObserver = observer.InformationContentObserver(model)
+	model.addObserver(icObserver)
+
+	medianICObserver = observer.MedianICObserver(model)
+	model.addObserver(medianICObserver)
+
+	return model
+
+
+def saveModelAndPlot():
+	# save trained model to file
+	date_string = datetime.now().strftime("%Y_%m_%d_%H_%M")
+	os.mkdir('../../training/' + date_string)
+	file_name = "../../training/" + date_string + "/model.pkl"
+	print "Saving model to " + str(file_name)
+	learner.saveModel(file_name)
+
+	# plot
+	plt.subplot(2,1,1)
+	plt.ylabel('Free energy function')
+	plt.title(str(hyper_params['learning_rate']) + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
+
+	plt.plot(getObserver(learner, "free energy testing").scores)
+	plt.plot(getObserver(learner, "free energy training").scores)
+
+	plt.subplot(2,1,2)
+	plt.ylabel('Reconstruction rate on dataset')
+	plt.xlabel('Number Of Epoch')
+
+	plt.plot(getObserver(learner, "reconstruction rate training").scores)
+	plt.plot(getObserver(learner, "reconstruction rate testing").scores)
+
+	# save plot to file
+	file_name_plot = "../../training/" + date_string + "/errorPlot.png"
+	plt.savefig(file_name_plot)
 
 
 
 # read the data and split it
+print "Reading the data..."
+start = time.time()
 seqReader = dataRead.SeqReader()
 allSeqs = seqReader.readOneHotFromFile('../data/seq.onehot.gz')
 
@@ -45,22 +111,23 @@ if USE_WHOLE_DATA:
 else:
 	data = [allSeqs[random.randrange(0,len(allSeqs))] for i in range(2000)]
 
+# split
 per=np.random.permutation(len(data))
 itest=per[:int(len(data)*train_test_ratio)]
 itrain=per[int(len(data)*train_test_ratio):]
-
-print "Test set size: " + str(len(itest))
-print "Train set size: " + str(len(itrain))
-
-val = [random.randrange(0, len(itrain)) for i in range(validationSize)]
+veri = [random.randrange(0, len(itrain)) for i in range(verificationSize)]
 
 # convert raw sequences to one hot matrices
 start = time.time()
 trainingData = np.array([data[i] for i in itrain])
 testingData = np.array([data[i] for i in itest])
-validationData = np.array([data[i] for i in val])
+verificationData = np.array([data[i] for i in veri])
 
-print "Conversion of test set in (in ms): " + str((time.time()-start)*1000)
+print trainingData.shape
+print allSeqs[0].shape
+print "Data successfully read in " + str((time.time()-start)) + " seconds."
+print "Train set size: " + str(len(itrain))
+print "Test set size: " + str(len(itest))
 
 # construct the model
 
@@ -79,67 +146,14 @@ hyper_params = {'number_of_motifs':number_of_motifs,
 				'cd_method':'pcd',
 				'momentum':0.9 # use 0.0 to disable momentum
 }
-learner = CRBM(hyperParams=hyper_params)
 
-# add the observers for free energy (test and train)
-free_energy_observer = observer.FreeEnergyObserver(learner, testingData, "Free Energy Testing Observer")
-learner.addObserver(free_energy_observer)
-#free_energy_train_observer = observer.FreeEnergyObserver(learner, trainingData, "Free Energy Training Observer")
-#learner.addObserver(free_energy_train_observer)
-
-# add the observers for reconstruction error (test and train)
-reconstruction_observer = observer.ReconstructionRateObserver(learner, testingData, "Reconstruction Rate Testing Observer")
-learner.addObserver(reconstruction_observer)
-#reconstruction_observer_train = observer.ReconstructionRateObserver(learner, trainingData, "Reconstruction Rate Training Observer")
-#learner.addObserver(reconstruction_observer_train)
-
-# add the observer of the motifs during training (to look at them afterwards)
-param_observer = observer.ParameterObserver(learner, None)
-learner.addObserver(param_observer)
-
-# add the motif hit scanner
-motif_hit_observer = observer.MotifHitObserver(learner, testingData)
-learner.addObserver(motif_hit_observer)
-print "Data mat shape: " + str(trainingData.shape)
-
-# add IC observers
-icObserver = observer.InformationContentObserver(learner)
-learner.addObserver(icObserver)
-
-medianICObserver = observer.MedianICObserver(learner)
-learner.addObserver(medianICObserver)
 
 # HERE, THE ACTUAL WORK IS DONE.
 # We want to save the model, even when the script is terminated via Ctrl-C.
 
-
-def saveModelAndPlot():
-	# save trained model to file
-	date_string = datetime.now().strftime("%Y_%m_%d_%H_%M")
-	os.mkdir('../../training/' + date_string)
-	file_name = "../../training/" + date_string + "/model.pkl"
-	print "Saving model to " + str(file_name)
-	learner.saveModel(file_name)
-	
-	# plot
-	plt.subplot(2,1,1)
-	plt.ylabel('Free energy function')
-	plt.title(str(hyper_params['learning_rate']) + " lr " + str(motif_length) + " kmers " + str(number_of_motifs) + " motifs_CD "+str(cd_k)+".png")
-
-	plt.plot(free_energy_observer.scores)
-	plt.plot(free_energy_train_observer.scores)
-
-	plt.subplot(2,1,2)
-	plt.ylabel('Reconstruction rate on dataset')
-	plt.xlabel('Number Of Epoch')
-	plt.plot(reconstruction_observer.scores)
-	plt.plot(reconstruction_observer_train.scores)
-
-	# save plot to file
-	file_name_plot = "../../training/" + date_string + "/errorPlot.png"
-	plt.savefig(file_name_plot)
-
+learner = buildModelWithObservers(hyper_params, testingData, verificationData)
 learner.printHyperParams()
+
 try:
 	# perform training
 	start = time.time()
@@ -149,7 +163,5 @@ try:
 except KeyboardInterrupt:
 	saveModelAndPlot()
 	print "You interrupted the program. It will save the model and exit."
-	raise
-
 
 saveModelAndPlot()

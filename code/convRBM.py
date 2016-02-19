@@ -225,7 +225,7 @@ class CRBM:
         return evh,eh
         
     def collectVHStatistics(self, prob_of_H, data):
-    	  #reshape input 
+        #reshape input 
         data=data.dimshuffle(1,0,2,3)
         prob_of_H=prob_of_H.dimshuffle(1,0,2,3)
         avh=conv(data,prob_of_H,border_mode="valid", filter_flip=False)
@@ -235,7 +235,7 @@ class CRBM:
         return avh
 
     def collectVStatistics(self, data):
-    	  #reshape input 
+        #reshape input 
         a=T.mean(data,axis=(0,1,3)).astype(theano.config.floatX)
         a=a.dimshuffle('x',0)
         a=T.inc_subtensor(a[:,:],a[:,::-1]) #match a-t and c-g occurances
@@ -250,12 +250,9 @@ class CRBM:
         return a
 
     def collectUpdateStatistics(self, prob_of_H, data):
-    	  #reshape input 
-
         average_VH=self.collectVHStatistics(prob_of_H, data)
         average_H=self.collectHStatistics(prob_of_H)
         average_V=self.collectVStatistics(data)
-
 
         return average_VH, average_H, average_V
 
@@ -286,9 +283,6 @@ class CRBM:
         
         if self.debug:
             G_motif_model = theano.printing.Print('Gradient for motifs (model): ')(G_motif_model)
-        #TODO: add adaptive learning rate
-				#TODO: add momentum
-
 
         mu=self.hyper_params['momentum']
         alpha=self.hyper_params['learning_rate']

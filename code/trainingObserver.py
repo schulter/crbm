@@ -192,8 +192,7 @@ class InformationContentObserver (TrainingObserver):
 	
 	def __init__(self, _model, _name="Information Content Observer"):
 		TrainingObserver.__init__(self, _model, None, _name)
-		print self.name
-		
+
 	def __getstate__(self):
 		state = dict(self.__dict__)
 		del state['scoringFunction']
