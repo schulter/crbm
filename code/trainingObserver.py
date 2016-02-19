@@ -164,8 +164,6 @@ class MotifHitObserver (TrainingObserver):
 		for batchIdx in xrange(iterations):
 			sumOfHits += self.scoringFunction(batchIdx)
 		avgHits = sumOfHits / iterations # mean
-		
-		
 		self.scores.append(avgHits)
 		return avgHits.mean()
 
@@ -188,3 +186,73 @@ class MotifHitObserver (TrainingObserver):
 	def getMotifHits (self, D):
 		[prob_of_H, H] = self.model.computeHgivenV(D)
 		return T.mean(H, axis=0) # mean over samples (K x 1 x N_h)
+
+
+class InformationContentObserver (TrainingObserver):
+	
+	def __init__(self, _model, _name="Information Content Observer"):
+		TrainingObserver.__init__(self, _model, None, _name)
+		print self.name
+		
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['model']
+		return state
+	
+	def calculateScore (self):
+		meanIC = self.scoringFunction(self.model.motifs.get_value())
+		self.scores.append(meanIC)
+		return meanIC
+
+	def getScoringFunction(self):
+		M = T.tensor4('Matrix')
+		ic = self.getInformationContent(M)
+		scoringFun = theano.function([M],
+					 ic,
+					 allow_input_downcast=True,
+					 name='InformationContentObservation'
+		)
+		return scoringFun
+
+
+	def getInformationContent (self, M):
+		pwm = self.model.softmax(M)
+		entropy = -pwm * T.log2(pwm)
+		entropy = T.sum(entropy, axis=2) # sum over letters
+		return T.log2(self.model.motifs.shape[2]) - T.mean(entropy) # log is possible information due to length of sequence
+
+
+class MedianICObserver (TrainingObserver):
+	
+	def __init__(self, _model, _name="Median Information Content Observer"):
+		TrainingObserver.__init__(self, _model, None, _name)
+		
+	def __getstate__(self):
+		state = dict(self.__dict__)
+		del state['scoringFunction']
+		del state['model']
+		return state
+	
+	def calculateScore (self):
+		meanIC = self.scoringFunction(batchIdx)
+		self.scores.append(meanIC)
+		return meanIC
+
+
+	def getScoringFunction(self):
+		M = T.tensor4('Matrix')
+		medIC = self.getMedianIC(M)
+		scoringFun = theano.function([M],
+					 medIC,
+					 allow_input_downcast=True,
+					 name='InformationContentObservation'
+		)
+		return scoringFun
+
+
+	def getMedianIC (self, D):
+		pwm = self.model.softmax(self.model.motifs)
+		entropy = -pwm * T.log2(pwm)
+		entropy = T.sum(entropy, axis=2) # sum over letters
+		return T.log2(self.model.motifs.shape[2]) - T.mean(T.sort(entropy, axis=2)[:,:,entropy.shape[2]//2])

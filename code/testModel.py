@@ -17,18 +17,18 @@ import os
 
 ########################################################
 # SET THE HYPER PARAMETERS
-epochs = 500
-cd_k = 2
-learning_rate = 0.01
+epochs = 300
+cd_k = 5
+learning_rate = 0.5
 doublestranded = False
 motif_length = 11
-number_of_motifs = 30
-batch_size = 300
-pooling_factor = 1
-sparsity = 0.3 # regularization parameter
-rho=0.001 # threshold for motif hit frequency
+number_of_motifs = 100
+batch_size = 100
+pooling_factor = 5
+sparsity = 1.01 # regularization parameter
+rho=0.005 # threshold for motif hit frequency
 
-train_test_ratio = 0.01
+train_test_ratio = 0.1
 
 USE_WHOLE_DATA = True
 validationSize = 500
@@ -38,7 +38,7 @@ validationSize = 500
 
 # read the data and split it
 seqReader = dataRead.SeqReader()
-allSeqs = seqReader.readSeqsInDirectory('../data/')
+allSeqs = seqReader.readOneHotFromFile('../data/seq.onehot.gz')
 
 if USE_WHOLE_DATA:
 	data = allSeqs
@@ -76,6 +76,7 @@ hyper_params = {'number_of_motifs':number_of_motifs,
 				'rho':rho,
 				'batch_size':batch_size,
 				'verbose':False,
+				'cd_method':'pcd',
 				'momentum':0.9 # use 0.0 to disable momentum
 }
 learner = CRBM(hyperParams=hyper_params)
@@ -83,23 +84,30 @@ learner = CRBM(hyperParams=hyper_params)
 # add the observers for free energy (test and train)
 free_energy_observer = observer.FreeEnergyObserver(learner, testingData, "Free Energy Testing Observer")
 learner.addObserver(free_energy_observer)
-free_energy_train_observer = observer.FreeEnergyObserver(learner, validationData, "Free Energy Training Observer")
-learner.addObserver(free_energy_train_observer)
+#free_energy_train_observer = observer.FreeEnergyObserver(learner, trainingData, "Free Energy Training Observer")
+#learner.addObserver(free_energy_train_observer)
 
 # add the observers for reconstruction error (test and train)
 reconstruction_observer = observer.ReconstructionRateObserver(learner, testingData, "Reconstruction Rate Testing Observer")
 learner.addObserver(reconstruction_observer)
-reconstruction_observer_train = observer.ReconstructionRateObserver(learner, validationData, "Reconstruction Rate Training Observer")
-learner.addObserver(reconstruction_observer_train)
+#reconstruction_observer_train = observer.ReconstructionRateObserver(learner, trainingData, "Reconstruction Rate Training Observer")
+#learner.addObserver(reconstruction_observer_train)
 
 # add the observer of the motifs during training (to look at them afterwards)
 param_observer = observer.ParameterObserver(learner, None)
 learner.addObserver(param_observer)
 
 # add the motif hit scanner
-motif_hit_observer = observer.MotifHitObserver(learner, validationData)
+motif_hit_observer = observer.MotifHitObserver(learner, testingData)
 learner.addObserver(motif_hit_observer)
 print "Data mat shape: " + str(trainingData.shape)
+
+# add IC observers
+icObserver = observer.InformationContentObserver(learner)
+learner.addObserver(icObserver)
+
+medianICObserver = observer.MedianICObserver(learner, trainingData)
+learner.addObserver(medianICObserver)
 
 # HERE, THE ACTUAL WORK IS DONE.
 # We want to save the model, even when the script is terminated via Ctrl-C.
@@ -131,7 +139,7 @@ def saveModelAndPlot():
 	file_name_plot = "../../training/" + date_string + "/errorPlot.png"
 	plt.savefig(file_name_plot)
 
-
+learner.printHyperParams()
 try:
 	# perform training
 	start = time.time()

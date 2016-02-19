@@ -64,7 +64,7 @@ class CRBM:
         else:
             b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         
-        b=b
+        b = b - 7.
         c = np.zeros((1, 4)).astype(theano.config.floatX)
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
@@ -79,6 +79,13 @@ class CRBM:
         self.motif_velocity=theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX), name='velocity_of_W',borrow=True)
         self.bias_velocity=theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX), name='velocity_of_bias',borrow=True)
         self.c_velocity=theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX), name='velocity_of_c',borrow=True)
+        
+        K = self.hyper_params['number_of_motifs']
+        if self.hyper_params['doublestranded']:
+            K *= 2
+        
+        if self.hyper_params['cd_method'] == 'pcd':
+            self.fantasy_h = theano.shared(value=np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX), name='fantasy_h', borrow=True)
 
 
     def initializeMotifs (self):
@@ -253,7 +260,7 @@ class CRBM:
         return average_VH, average_H, average_V
 
     
-    def updateWeightsOnMinibatch (self, D, num_of_cds):
+    def updateWeightsOnMinibatch (self, D, gibbs_chain_length):
         # calculate the data gradient for weights (motifs), bias and c
         [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
         if self.debug:
@@ -263,10 +270,14 @@ class CRBM:
         
         if self.debug:
             G_motif_data = theano.printing.Print('Gradient for motifs (data): ')(G_motif_data)
+
         # calculate model probs
-        H_given_model = H_given_data
-        #TODO: PCD
-        for i in range(num_of_cds):
+        if self.hyper_params['cd_method'] == 'pcd':
+            H_given_model = self.fantasy_h
+        else:
+            H_given_model = H_given_data
+
+        for i in range(gibbs_chain_length):
             prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
             prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
         
@@ -289,7 +300,8 @@ class CRBM:
 
         # update the parameters and apply sparsity
         vmotifs = mu * self.motif_velocity + alpha* (G_motif_data - G_motif_model-sp*reg_motif)
-        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+        #vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+        vbias = mu * self.bias_velocity + 0 * (G_bias_data - G_bias_model-sp*reg_bias)
         vc = mu*self.c_velocity + alpha* (G_c_data - G_c_model)
 
         new_motifs = self.motifs + vmotifs
@@ -297,11 +309,16 @@ class CRBM:
         new_c = self.c + vc
 
         if self.hyper_params['doublestranded']:
+            vmotifs,vbias = self.matchWeightchangeForComplementaryMotifs(vmotifs,vbias)
             new_motifs,new_bias = self.matchWeightchangeForComplementaryMotifs(new_motifs,new_bias)
         
-        #score = self.getDataReconstruction(D)
-        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
-                   (self.motif_velocity,vmotifs),(self.bias_velocity,vbias),(self.c_velocity,vc)]
+        if self.hyper_params['cd_method'] == 'pcd':
+            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                       (self.motif_velocity,vmotifs),(self.bias_velocity,vbias),(self.c_velocity,vc),
+                       (self.fantasy_h, H_given_model)]
+        else:
+            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                       (self.motif_velocity,vmotifs),(self.bias_velocity,vbias),(self.c_velocity,vc)]
 
         return updates
     
