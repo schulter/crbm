@@ -12,6 +12,7 @@ import cPickle
 import theano
 import os
 
+plotAfterTraining = False
 ########################################################
 # SET THE HYPER PARAMETERS
 allHyperParams = [
@@ -52,7 +53,7 @@ allHyperParams = [
 'cd_k':5,
 'sparsity':1.01,
 'rho':0.05,
-'batch_size':100,
+'batch_size':50,
 'verbose':False,
 'cd_method':'pcd',
 'momentum':0.9
@@ -66,7 +67,7 @@ allHyperParams = [
 'cd_k':5,
 'sparsity':1.01,
 'rho':0.05,
-'batch_size':100,
+'batch_size':20,
 'verbose':False,
 'cd_method':'pcd',
 'momentum':0.9
@@ -124,28 +125,29 @@ def saveModelAndPlot(model):
     print "Saving model to " + str(file_name)
     model.saveModel(file_name)
 
-    # plot
-    plt.subplot(2,1,1)
-    plt.ylabel('Free energy function')
-    title = "%f lr %d kmers %d numOfMotifs %d cd_k" % (model.hyper_params['learning_rate'],
-                                                       model.hyper_params['motif_length'],
-                                                       model.hyper_params['number_of_motifs'],
-                                                       model.hyper_params['cd_k'])
-    plt.title(title)
+    if plotAfterTraining:
+        # plot
+        plt.subplot(2,1,1)
+        plt.ylabel('Free energy function')
+        title = "%f lr %d kmers %d numOfMotifs %d cd_k" % (model.hyper_params['learning_rate'],
+                                                           model.hyper_params['motif_length'],
+                                                           model.hyper_params['number_of_motifs'],
+                                                           model.hyper_params['cd_k'])
+        plt.title(title)
 
-    plt.plot(getObserver(model, "free energy testing").scores)
-    plt.plot(getObserver(model, "free energy training").scores)
+        plt.plot(getObserver(model, "free energy testing").scores)
+        plt.plot(getObserver(model, "free energy training").scores)
 
-    plt.subplot(2,1,2)
-    plt.ylabel('Reconstruction rate on dataset')
-    plt.xlabel('Number Of Epoch')
+        plt.subplot(2,1,2)
+        plt.ylabel('Reconstruction rate on dataset')
+        plt.xlabel('Number Of Epoch')
 
-    plt.plot(getObserver(model, "reconstruction rate training").scores)
-    plt.plot(getObserver(model, "reconstruction rate testing").scores)
+        plt.plot(getObserver(model, "reconstruction rate training").scores)
+        plt.plot(getObserver(model, "reconstruction rate testing").scores)
 
-    # save plot to file
-    file_name_plot = "../../training/" + date_string + "/errorPlot.png"
-    plt.savefig(file_name_plot)
+        # save plot to file
+        file_name_plot = "../../training/" + date_string + "/errorPlot.png"
+        plt.savefig(file_name_plot)
 
 
 
