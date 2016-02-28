@@ -16,42 +16,56 @@ plotAfterTraining = False
 ########################################################
 # SET THE HYPER PARAMETERS
 allHyperParams = [
-{'number_of_motifs':100,
+{'number_of_motifs':60,
 'motif_length':11,
 'learning_rate':0.5,
 'doublestranded':False,
 'pooling_factor':5,
-'epochs':100,
+'epochs':150,
 'cd_k':5,
-'sparsity':1.01,
+'sparsity':0.1,
 'rho':0.05,
 'batch_size':100,
 'verbose':False,
 'cd_method':'pcd',
 'momentum':0.9
 },
-{'number_of_motifs':150,
+{'number_of_motifs':60,
 'motif_length':11,
 'learning_rate':0.5,
 'doublestranded':False,
 'pooling_factor':5,
-'epochs':100,
+'epochs':150,
 'cd_k':5,
-'sparsity':1.01,
+'sparsity':0.8,
 'rho':0.05,
 'batch_size':100,
 'verbose':False,
 'cd_method':'pcd',
 'momentum':0.9
 },
-{'number_of_motifs':300,
+{'number_of_motifs':60,
 'motif_length':11,
 'learning_rate':0.5,
 'doublestranded':False,
 'pooling_factor':5,
-'epochs':100,
+'epochs':150,
 'cd_k':5,
-'sparsity':1.01,
+'sparsity':5,
+'rho':0.05,
+'batch_size':100,
+'verbose':False,
+'cd_method':'pcd',
+'momentum':0.9
+},
+{'number_of_motifs':60,
+'motif_length':11,
+'learning_rate':0.5,
+'doublestranded':False,
+'pooling_factor':5,
+'epochs':150,
+'cd_k':5,
+'sparsity':10,
 'rho':0.05,
 'batch_size':50,
 'verbose':False,
@@ -63,9 +77,9 @@ allHyperParams = [
 'learning_rate':0.5,
 'doublestranded':False,
 'pooling_factor':5,
-'epochs':100,
+'epochs':150,
 'cd_k':5,
-'sparsity':1.01,
+'sparsity':20,
 'rho':0.05,
 'batch_size':20,
 'verbose':False,
@@ -155,7 +169,7 @@ def saveModelAndPlot(model):
 print "Reading the data..."
 start = time.time()
 seqReader = dataRead.SeqReader()
-data = seqReader.readOneHotFromFile('../data/seq.onehot.gz')
+data = seqReader.readSequencesFromFile('../data/stemcells2.fa')
 # split
 per=np.random.permutation(len(data))
 itest=per[:int(len(data)*train_test_ratio)]
@@ -185,6 +199,7 @@ for hyper_params in allHyperParams:
 
     except KeyboardInterrupt:
         print "You interrupted the program. It will save the model and exit."
+        break
 
     finally:
         print "Save model number : " + str(count)
