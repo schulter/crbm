@@ -64,7 +64,7 @@ class CRBM:
         else:
             b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         
-        b = b - 7.
+        b = b - 9.
         c = np.zeros((1, 4)).astype(theano.config.floatX)
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
@@ -294,8 +294,8 @@ class CRBM:
 
         # update the parameters and apply sparsity
         vmotifs = mu * self.motif_velocity + alpha* (G_motif_data - G_motif_model-sp*reg_motif)
-        #vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
-        vbias = mu * self.bias_velocity + 0 * (G_bias_data - G_bias_model-sp*reg_bias)
+        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+        #vbias = mu * self.bias_velocity + 0 * (G_bias_data - G_bias_model-sp*reg_bias)
         vc = mu*self.c_velocity + alpha* (G_c_data - G_c_model)
 
         new_motifs = self.motifs + vmotifs
@@ -392,8 +392,26 @@ class CRBM:
         free_energy = free_energy - T.sum(D * cMod) 
         
         return free_energy/(D.shape[0]*D.shape[3])
+
+
+    def freeEnergyForData (self, D):
+
+        x = conv(D, self.motifs, filter_flip=False)
+        bMod = self.bias # to prevent member from being shuffled
+        bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias on both sides
+        x = x + bMod
+        pool = self.hyper_params['pooling_factor']
+
+        x = x.reshape((x.shape[0],x.shape[1],x.shape[2],x.shape[3]//pool, pool))
+        free_energy = -T.sum(T.log(1.+T.sum(T.exp(x),axis=4)), axis=(1,2,3))
         
+        cMod = self.c
+        cMod = cMod.dimshuffle('x', 0, 1, 'x') # make it 4D and broadcastable there
+        free_energy = free_energy - T.sum(D * cMod, axis=(1,2,3)) 
         
+        return free_energy/D.shape[3]
+
+
     def softmax (self, x):
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
         
