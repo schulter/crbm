@@ -8,88 +8,32 @@ import numpy as np
 import random
 import time
 from datetime import datetime
-import cPickle
-import theano
 import os
 
 plotAfterTraining = False
 ########################################################
 # SET THE HYPER PARAMETERS
 allHyperParams = [
-{'number_of_motifs':60,
-'motif_length':11,
-'learning_rate':0.5,
-'doublestranded':False,
-'pooling_factor':5,
-'epochs':150,
-'cd_k':5,
-'sparsity':0.1,
-'rho':0.05,
-'batch_size':100,
-'verbose':False,
-'cd_method':'pcd',
-'momentum':0.9
-},
-{'number_of_motifs':60,
-'motif_length':11,
-'learning_rate':0.5,
-'doublestranded':False,
-'pooling_factor':5,
-'epochs':150,
-'cd_k':5,
-'sparsity':0.8,
-'rho':0.05,
-'batch_size':100,
-'verbose':False,
-'cd_method':'pcd',
-'momentum':0.9
-},
-{'number_of_motifs':60,
-'motif_length':11,
-'learning_rate':0.5,
-'doublestranded':False,
-'pooling_factor':5,
-'epochs':150,
-'cd_k':5,
-'sparsity':5,
-'rho':0.05,
-'batch_size':100,
-'verbose':False,
-'cd_method':'pcd',
-'momentum':0.9
-},
-{'number_of_motifs':60,
-'motif_length':11,
-'learning_rate':0.5,
-'doublestranded':False,
-'pooling_factor':5,
-'epochs':150,
-'cd_k':5,
-'sparsity':10,
-'rho':0.05,
-'batch_size':50,
-'verbose':False,
-'cd_method':'pcd',
-'momentum':0.9
-},
-{'number_of_motifs':500,
-'motif_length':11,
-'learning_rate':0.5,
-'doublestranded':False,
-'pooling_factor':5,
-'epochs':150,
-'cd_k':5,
-'sparsity':20,
-'rho':0.05,
-'batch_size':20,
-'verbose':False,
-'cd_method':'pcd',
-'momentum':0.9
-}]
+    {
+        'number_of_motifs': 60,
+        'motif_length': 11,
+        'learning_rate': 0.5,
+        'doublestranded': False,
+        'pooling_factor': 5,
+        'epochs': 150,
+        'cd_k': 5,
+        'sparsity': 0.1,
+        'batch_size': 100,
+        'verbose': False,
+        'cd_method': 'pcd',
+        'momentum': 0.9
+    }
+]
 
 train_test_ratio = 0.1
 verificationSize = 500
 ########################################################
+
 
 def getObserver(model, title):
     for obs in model.observers:
@@ -98,19 +42,23 @@ def getObserver(model, title):
     return None
 
 
-def buildModelWithObservers (hyper_params, testingData, verificationData):
-    model = CRBM(hyperParams=hyper_params)
+def buildModelWithObservers(hyperParams, test_data, veri_data):
+    model = CRBM(hyperParams=hyperParams)
 
     # add the observers for free energy (test and train)
-    free_energy_observer = observer.FreeEnergyObserver(model, testingData, "Free Energy Testing Observer")
+    free_energy_observer = observer.FreeEnergyObserver(model, test_data, "Free Energy Testing Observer")
     model.addObserver(free_energy_observer)
-    free_energy_train_observer = observer.FreeEnergyObserver(model, verificationData, "Free Energy Training Observer")
+    free_energy_train_observer = observer.FreeEnergyObserver(model, veri_data, "Free Energy Training Observer")
     model.addObserver(free_energy_train_observer)
 
     # add the observers for reconstruction error (test and train)
-    reconstruction_observer = observer.ReconstructionRateObserver(model, testingData, "Reconstruction Rate Testing Observer")
+    reconstruction_observer = observer.ReconstructionRateObserver(model,
+                                                                  test_data,
+                                                                  "Reconstruction Rate Testing Observer")
     model.addObserver(reconstruction_observer)
-    reconstruction_observer_train = observer.ReconstructionRateObserver(model, verificationData, "Reconstruction Rate Training Observer")
+    reconstruction_observer_train = observer.ReconstructionRateObserver(model,
+                                                                        veri_data,
+                                                                        "Reconstruction Rate Training Observer")
     model.addObserver(reconstruction_observer_train)
 
     # add the observer of the motifs during training (to look at them afterwards)
@@ -141,7 +89,7 @@ def saveModelAndPlot(model):
 
     if plotAfterTraining:
         # plot
-        plt.subplot(2,1,1)
+        plt.subplot(2, 1, 1)
         plt.ylabel('Free energy function')
         title = "%f lr %d kmers %d numOfMotifs %d cd_k" % (model.hyper_params['learning_rate'],
                                                            model.hyper_params['motif_length'],
@@ -152,7 +100,7 @@ def saveModelAndPlot(model):
         plt.plot(getObserver(model, "free energy testing").scores)
         plt.plot(getObserver(model, "free energy training").scores)
 
-        plt.subplot(2,1,2)
+        plt.subplot(2, 1, 2)
         plt.ylabel('Reconstruction rate on dataset')
         plt.xlabel('Number Of Epoch')
 
@@ -164,16 +112,15 @@ def saveModelAndPlot(model):
         plt.savefig(file_name_plot)
 
 
-
 # read the data and split it
 print "Reading the data..."
 start = time.time()
 seqReader = dataRead.SeqReader()
 data = seqReader.readSequencesFromFile('../data/stemcells2.fa')
 # split
-per=np.random.permutation(len(data))
-itest=per[:int(len(data)*train_test_ratio)]
-itrain=per[int(len(data)*train_test_ratio):]
+per = np.random.permutation(len(data))
+itest = per[:int(len(data)*train_test_ratio)]
+itrain = per[int(len(data)*train_test_ratio):]
 veri = [random.randrange(0, len(itrain)) for i in range(verificationSize)]
 
 # convert raw sequences to one hot matrices
@@ -192,7 +139,7 @@ for hyper_params in allHyperParams:
     learner = buildModelWithObservers(hyper_params, testingData, verificationData)
     learner.printHyperParams()
 
-    try:# We want to save the model, even when the script is terminated via Ctrl-C.
+    try:  # We want to save the model, even when the script is terminated via Ctrl-C.
         start = time.time()
         learner.trainModel(trainingData)
         print "Training of " + str(trainingData.shape[0]) + " performed in: " + str(time.time()-start) + " seconds."

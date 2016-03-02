@@ -1,6 +1,6 @@
 from theano.gof.op import get_debug_values
-import numpy as np
 import theano.tensor as T
+
 
 def max_pool(z, pool_shape, top_down=None, theano_rng=None):
     """
@@ -137,8 +137,7 @@ def max_pool(z, pool_shape, top_down=None, theano_rng=None):
 
     if theano_rng is None:
         return p, h
-    
-    ### --------------------- DONE IF NO SAMPLES ARE GENERATED ---------------------------###
+
     else:
         events = []
         for i in xrange(r):
@@ -185,8 +184,4 @@ def max_pool(z, pool_shape, top_down=None, theano_rng=None):
         p_sample = 1 - reshaped_multinomial[:, :, :, :, -1]
 
         return p, h, p_sample, h_sample
-
-
-
-
 
