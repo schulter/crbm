@@ -6,6 +6,7 @@ from theano.tensor.nnet import conv2d as conv
 #from theano.sandbox.cuda.dnn import dnn_conv
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 from theano import pp
+import scipy
 
 # numpy and python classics
 import numpy as np
@@ -58,14 +59,25 @@ class CRBM:
         self.hyper_params = hyperParams
         self.initializeMotifs()
         
+        # determine the parameter rho for the model
+        rho = 1. / (self.hyper_params['number_of_motifs'] * self.hyper_params['motif_length'])
+        self.hyper_params['rho'] = rho
+        
         # cRBM parameters (2*x to respect both strands of the DNA)
         if self.hyper_params["doublestranded"]:
             b = np.zeros((1, 2*self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         else:
             b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
         
-        b = b - 9.
         c = np.zeros((1, 4)).astype(theano.config.floatX)
+        
+        # adapt the bias such that it will initially have rho motif hits in H
+        # That is, we want to have rho percent of the samples positive
+        # randn draws from 'standard normal', this is why we have 0 and 1
+        b = b + scipy.stats.norm.ppf(self.hyper_params['rho'], 0, np.sqrt(self.hyper_params['motif_length']))
+
+        print "Setting b to:"
+        print b
 
         self.bias = theano.shared(value=b, name='bias', borrow=True)
         self.c = theano.shared(value=c, name='c', borrow=True)
@@ -76,9 +88,9 @@ class CRBM:
         
         self.debug = self.hyper_params['verbose']
         self.observers = []
-        self.motif_velocity=theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX), name='velocity_of_W',borrow=True)
-        self.bias_velocity=theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX), name='velocity_of_bias',borrow=True)
-        self.c_velocity=theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX), name='velocity_of_c',borrow=True)
+        self.motif_velocity = theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX), name='velocity_of_W',borrow=True)
+        self.bias_velocity = theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX), name='velocity_of_bias',borrow=True)
+        self.c_velocity = theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX), name='velocity_of_c',borrow=True)
         
         K = self.hyper_params['number_of_motifs']
         if self.hyper_params['doublestranded']:
@@ -91,7 +103,7 @@ class CRBM:
     def initializeMotifs (self):
 
         if self.hyper_params["doublestranded"]:
-            x = np.random.randn(2 * self.hyper_params['number_of_motifs'], 1, 4, self.hyper_params['motif_length']).astype(theano.config.floatX)
+            x = np.random.randn(2 * self.hyper_params['number_of_motifs'], 1, 4, self.hyper_params['motif_length']).astype(theano.config.floatX) + scipy.stats.norm.ppf(self.hyper_params['rho'], 0, self.hyper_params['motif_length'])
             # create reverse complement
             for i in range(0, 2*self.hyper_params['number_of_motifs'], 2):
                 x[i+1] = x[i,:,::-1,::-1]
@@ -162,7 +174,7 @@ class CRBM:
         bMod = self.bias
         bMod = bMod.dimshuffle('x', 1, 0, 'x') # add dims to the bias until it works
         out = out + bMod
-        
+
         # perform prob. max pooling g(filter(D,W) + b) and sampling
         if self.hyper_params['doublestranded']:
             pooled = max_pool(out.dimshuffle(0,2,1,3),
