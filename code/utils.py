@@ -185,3 +185,21 @@ def max_pool(z, pool_shape, top_down=None, theano_rng=None):
 
         return p, h, p_sample, h_sample
 
+
+def max_pool_us(z, pool_shape, theano_rng=None):
+    # Firstly, get some shape information
+    N_batch, K, _, N_h = z.shape
+    
+    # exp everything to softmax it then
+    z_exp = T.exp(z)
+    
+    # reshape in a way such that units that will be pooled together
+    # are close to each other
+    H_reshaped = z_exp.reshape(N_batch, K / pool_shape[0], pool_shape[0], N_h / pool_shape[1], pool_shape[1])
+    
+    
+    # now, simply add to get the denominators (but keep dims)
+    denominators = T.sum(H_reshaped, axis=4, deepdims=True).sum(axis=2, keepdims=True) + 1
+    
+    # now, divide our reshaped matrix by denominators
+    softmaxed = H_reshaped / denominators

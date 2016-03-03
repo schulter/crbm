@@ -243,7 +243,7 @@ class CRBM:
         prob_of_H = prob_of_H.dimshuffle(1, 0, 2, 3)
         avh = conv(data, prob_of_H, border_mode="valid", filter_flip=False)
         avh = avh / T.prod(prob_of_H.shape[1:])
-        avh = avh.dimshuffle(1, 0, 2, 3)
+        avh = avh.dimshuffle(1, 0, 2, 3).astype(theano.config.floatX)
 
         return avh
 
