@@ -189,17 +189,54 @@ def max_pool(z, pool_shape, top_down=None, theano_rng=None):
 def max_pool_us(z, pool_shape, theano_rng=None):
     # Firstly, get some shape information
     N_batch, K, _, N_h = z.shape
+    vertical_unit_num = K // pool_shape[0]
+    horizontal_unit_num = N_h // pool_shape[1]
     
-    # exp everything to softmax it then
-    z_exp = T.exp(z)
-    
+    # STEP 1: calculate softmax probabilites for the units
     # reshape in a way such that units that will be pooled together
     # are close to each other
-    H_reshaped = z_exp.reshape(N_batch, K / pool_shape[0], pool_shape[0], N_h / pool_shape[1], pool_shape[1])
+    R = z.reshape((N_batch,
+                   vertical_unit_num,
+                   1 * pool_shape[0],
+                   horizontal_unit_num,
+                   pool_shape[1])).astype(z.dtype)
     
+    # 2. exponentiate everything
+    R = T.exp(R)
+
+    # calculate denominators for softmax
+    denom = R.sum(axis=4, keepdims=True).sum(axis=2, keepdims=True).astype(R.dtype)
+    denom_small = R.sum(axis=4).sum(axis=2)
+    denom_small = denom_small.reshape((denom_small.shape[0], denom_small.shape[1], denom_small.shape[2], 1))
     
-    # now, simply add to get the denominators (but keep dims)
-    denominators = T.sum(H_reshaped, axis=4, deepdims=True).sum(axis=2, keepdims=True) + 1
+    # now, divide our reshaped matrix by denominators to get the probability matrix
+    # remember: softmax_i = exp(x_i) / (1 + sum_over_j exp(x_j))
+    div = R / (denom + 1)
+    probabilities_H = div.reshape(z.shape)
+
+    # STEP 2: sample from the softmax distribution calculated earlier
+    # for sampling, get the units to have one dimension only
+    div_s = div.dimshuffle(0, 1, 3, 2, 4)
+    div_s = div_s.reshape((div_s.shape[0], div_s.shape[1], div_s.shape[2], -1))
+
+    # now, add 1 / (denom + 1) to the last dim to represent no activation
+    no_activation = T.ones((div_s.shape[0], div_s.shape[1], div_s.shape[2], 1)) / (1 + denom_small)
+    with_no_act = T.concatenate((div_s, no_activation), axis=3)
+    probabilities_P = div.sum(axis=(2,4), keepdims=True)
+
+    # The MRG random stream only supports 2D matrices -> reshape to that
+    multinomial_drawing_matrix = with_no_act.reshape((with_no_act.shape[0]*with_no_act.shape[1]*with_no_act.shape[2],
+                                                      with_no_act.shape[3]))
+
+    # do the drawing
+    multinomial = theano_rng.multinomial(pvals=multinomial_drawing_matrix, dtype=multinomial_drawing_matrix.dtype)
+    multinomial = multinomial[:,:-1] # remove the no-activation unit
+
+    # reshape back to original shapes
+    sample_H = multinomial.reshape((N_batch, vertical_unit_num, horizontal_unit_num, pool_shape[0], pool_shape[1]))
+    sample_H = sample_H.dimshuffle(0, 1, 3, 2, 4)
+    sample_H = sample_H.reshape(z.shape)
     
-    # now, divide our reshaped matrix by denominators
-    softmaxed = H_reshaped / denominators
+    # get P (probabilites and sample reduced (one number per unit)
+
+    return T.zeros(z.shape), probabilities_H, T.zeros(z.shape), sample_H
