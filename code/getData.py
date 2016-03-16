@@ -88,8 +88,9 @@ def computeKmerCounts(data, k):
   seqlen=data.shape[3]
   countmatrix=np.zeros((np.power(4,k), nseq)).astype('int')
   x=np.power(4,range(k))
+  a=range(4)
   for i in range(nseq):
     for j in range(seqlen-k+1):
-      countmatrix[np.sum(np.dot(data[i,0,:,j:(j+k)],x).astype('int')), i]=\
-          countmatrix[np.sum(np.dot(data[i,0,:,j:(j+k)],x).astype('int')), i]+1
+      countmatrix[np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int'), i]=\
+          countmatrix[np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int'), i]+1
   return countmatrix
