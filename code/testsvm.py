@@ -44,6 +44,7 @@ test_input=np.concatenate((km_stem_test,km_fibro_test),axis=0)
 test_labels=np.ones((test_input.shape[0]))
 test_labels[:km_stem_test.shape[0]]=-1
 
+print "Finished reading and converting. Start classifying"
 # train an SVM
 clf = svm.SVC()
 clf.fit(training_input, training_labels)
@@ -53,5 +54,5 @@ clf.fit(training_input, training_labels)
 test_predicted=clf.decision_function(test_input)
 
 # inspect the performance
-roc_auc_score(test_labels, test_predicted)
+print roc_auc_score(test_labels, test_predicted)
 roc_curve(test_labels,test_predicted)
