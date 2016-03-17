@@ -86,11 +86,11 @@ class JASPARReader:
 def computeKmerCounts(data, k):
   nseq=data.shape[0]
   seqlen=data.shape[3]
-  countmatrix=np.zeros((np.power(4,k), nseq)).astype('int')
+  countmatrix=np.zeros((nseq,np.power(4,k))).astype('int')
   x=np.power(4,range(k))
   a=range(4)
   for i in range(nseq):
     for j in range(seqlen-k+1):
-      countmatrix[np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int'), i]=\
-          countmatrix[np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int'), i]+1
+      countmatrix[i,np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int')]=\
+          countmatrix[i,np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int')]+1
   return countmatrix
