@@ -22,37 +22,8 @@ import theano.tensor as T
 
 ########################################################
 # SET THE HYPER PARAMETERS
-allHyperParams = [
-    {
-        'number_of_motifs': 5,
-        'motif_length': 9,
-        'learning_rate': 0.5,
-        'doublestranded': False,
-        'pooling_factor': 4,
-        'epochs': 200,
-        'cd_k': 5,
-        'sparsity': 0.01,
-        'batch_size': 20,
-        'verbose': False,
-        'cd_method': 'pcd',
-        'momentum': 0.9
-    },
-    {
-        'number_of_motifs': 20,
-        'motif_length': 9,
-        'learning_rate': 0.5,
-        'doublestranded': False,
-        'pooling_factor': 4,
-        'epochs': 200,
-        'cd_k': 5,
-        'sparsity': 0.1,
-        'batch_size': 20,
-        'verbose': False,
-        'cd_method': 'pcd',
-        'momentum': 0.9
-    },
-    {
-        'number_of_motifs': 50,
+hyperParams={
+        'number_of_motifs': 1,
         'motif_length': 9,
         'learning_rate': 0.5,
         'doublestranded': False,
@@ -60,57 +31,14 @@ allHyperParams = [
         'epochs': 200,
         'cd_k': 5,
         'sparsity': 0.5,
-        'batch_size': 20,
-        'verbose': False,
-        'cd_method': 'pcd',
-        'momentum': 0.9
-    },
-    {
-        'number_of_motifs': 100,
-        'motif_length': 9,
-        'learning_rate': 0.5,
-        'doublestranded': False,
-        'pooling_factor': 4,
-        'epochs': 200,
-        'cd_k': 5,
-        'sparsity': 1,
-        'batch_size': 20,
-        'verbose': False,
-        'cd_method': 'pcd',
-        'momentum': 0.9
-    },
-    {
-        'number_of_motifs': 500,
-        'motif_length': 9,
-        'learning_rate': 0.5,
-        'doublestranded': False,
-        'pooling_factor': 4,
-        'epochs': 200,
-        'cd_k': 5,
-        'sparsity': 5,
-        'batch_size': 20,
-        'verbose': False,
-        'cd_method': 'pcd',
-        'momentum': 0.9
-    },
-    {
-        'number_of_motifs': 1000,
-        'motif_length': 9,
-        'learning_rate': 0.5,
-        'doublestranded': False,
-        'pooling_factor': 4,
-        'epochs': 200,
-        'cd_k': 5,
-        'sparsity': 10,
-        'batch_size': 20,
+        'batch_size': 100,
         'verbose': False,
         'cd_method': 'pcd',
         'momentum': 0.9
     }
-]
 
 train_test_ratio = 0.1
-batchSize = 10
+batchSize = hyperParams['batch_size']
 ########################################################
 
 
@@ -247,8 +175,12 @@ scores.append(clf.predict_proba(km_test)[:,1])
 texts.append('SVM with RBF kernel')
 print "Training SVM complete"
 
+allHyperParams=(1,5,10,50,100,500)
 try:
-    for hyper_params in allHyperParams:
+    for nmot in allHyperParams:
+        hyper_params=hyperParams
+        #'number_of_motifs': 1,
+        hyper_params['number_of_motifs']=nmot
         # build model
         learner_stem = buildModelWithObservers(hyper_params, testingData_stem)
         learner_stem.printHyperParams()
