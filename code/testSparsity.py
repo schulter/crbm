@@ -240,10 +240,11 @@ km_test = dataRead.computeKmerCounts(allTestingData, 5)
 
 labels_for_svm = np.concatenate( (np.ones(trainingData_stem.shape[0]), -np.ones(trainingData_fibro.shape[0])), axis=0 )
 
-clf = svm.SVC(probability=True)
+clf = svm.SVC(probability=False)
 clf.fit(km_train, labels_for_svm)
 
-scores.append(clf.predict_proba(km_test)[:,1])
+#scores.append(clf.predict_proba(km_test)[:,1])
+scores.append(clf.decision_function(km_test))
 texts.append('SVM with RBF kernel')
 print "Training SVM complete"
 
