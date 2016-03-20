@@ -95,7 +95,7 @@ class CRBM:
         self.c = theano.shared(value=c, name='c', borrow=True)
 
         # infrastructural parameters
-        self.theano_rng = RS()
+        self.theano_rng = RS(seed=int(time.time()))
         self.params = [self.motifs, self.bias, self.c]
         
         self.debug = self.hyper_params['verbose']
