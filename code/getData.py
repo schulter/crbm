@@ -94,3 +94,12 @@ def computeKmerCounts(data, k):
             position = np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int')
             countmatrix[i, position] = countmatrix[i, position] + 1
     return countmatrix
+
+def saveModel(model, name):
+		# save trained model to file
+		if not os.path.exists('../../training/' + name):
+		  os.mkdir('../../training/' + name)
+		file_name = "../../training/" + name + "/model.pkl"
+		print "Saving model to " + str(file_name)
+		model.saveModel(file_name)
+

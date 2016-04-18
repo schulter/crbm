@@ -20,7 +20,7 @@ class TrainingObserver:
 
 
 class FreeEnergyObserver(TrainingObserver):
-    def __init__(self, _model, _data, _name="Free Energy Observer"):
+    def __init__(self, _model, _data, _name="FE"):
         TrainingObserver.__init__(self, _model, _data, _name)
 
     def __getstate__(self):
@@ -58,7 +58,7 @@ class FreeEnergyObserver(TrainingObserver):
 
 
 class ReconstructionRateObserver(TrainingObserver):
-    def __init__(self, _model, _data, _name="Reconstruction Rate Observer"):
+    def __init__(self, _model, _data, _name="Recon"):
         TrainingObserver.__init__(self, _model, _data, _name)
 
     def __getstate__(self):
@@ -176,7 +176,7 @@ class MotifHitObserver(TrainingObserver):
 
 
 class InformationContentObserver(TrainingObserver):
-    def __init__(self, _model, _name="Information Content Observer"):
+    def __init__(self, _model, _name="IC"):
         TrainingObserver.__init__(self, _model, None, _name)
 
     def __getstate__(self):
@@ -209,7 +209,7 @@ class InformationContentObserver(TrainingObserver):
 
 
 class MedianICObserver(TrainingObserver):
-    def __init__(self, _model, _name="Median Information Content Observer"):
+    def __init__(self, _model, _name="medIC"):
         TrainingObserver.__init__(self, _model, None, _name)
 
     def __getstate__(self):

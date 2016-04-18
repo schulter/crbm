@@ -1,6 +1,10 @@
+import numpy as np
+import theano
+from theano import tensor as T
 
 def getFreeEnergyFunction (model, data):
     D = T.tensor4('data')
+    batchSize=model.hyper_params['batch_size']
     dataS = theano.shared(value=data, borrow=True, name='givenData')
     index = T.lscalar()
     energy = model.freeEnergyForData(D)
@@ -11,6 +15,7 @@ def getFreeEnergyFunction (model, data):
 
 def getFreeEnergyPoints(model, data):
     fun = getFreeEnergyFunction(model, data)
+    batchSize=model.hyper_params['batch_size']
     iterations = data.shape[0] // batchSize
 
     M = np.zeros(data.shape[0])
