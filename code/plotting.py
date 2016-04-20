@@ -29,7 +29,7 @@ def plotFE(model):
 		plt.savefig(file_name_plot)
 
 
-def plotROC(scores, texts, labels):
+def plotROC(scores, texts, labels, filename):
     assert len(scores) == len(texts) #== len(labels)
     fig = plt.figure(figsize=(14, 8))
 
@@ -48,5 +48,5 @@ def plotROC(scores, texts, labels):
     plt.ylabel('True Positive Rate')
     plt.title('Receiver operating characteristics for sparsity constraint')
     plt.legend(loc="lower right")
-    fig.savefig('ROC_for_sparsity.png', dpi=400)
+    fig.savefig(filename, dpi=400)
 
