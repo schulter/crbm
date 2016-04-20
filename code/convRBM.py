@@ -332,6 +332,11 @@ class CRBM:
 
     def trainModel(self, trainData):
         # assert that pooling can be done without rest to the division
+        # compute sequence length
+        nseq=int((trainData.shape[3]-self.hyper_params['motif_length'] + 1)/self.hyper_params['pooling_factor'])*\
+        		self.hyper_params['pooling_factor']+ self.hyper_params['motif_length'] -1
+        trainData=trainData[:,:,:,:nseq]
+
         assert (((trainData.shape[3]-self.hyper_params['motif_length'] + 1) % self.hyper_params['pooling_factor']) == 0)
 
         batchSize = self.hyper_params['batch_size']
