@@ -1,6 +1,7 @@
 import theano.tensor as T
 import theano
 import numpy as np
+import freeenergy
 
 
 class TrainingObserver:
@@ -31,30 +32,13 @@ class FreeEnergyObserver(TrainingObserver):
         return state
 
     def calculateScore(self):
-        iterations = max(self.data.shape[0] / self.batchSize, 1)
-        sumOfScores = 0
-        for batchIdx in xrange(iterations):
-            sumOfScores += self.scoringFunction(batchIdx)
-        score = sumOfScores / iterations  # mean
+        score=freeenergy.getMeanFreeEnergy(self.model, self.data)
         self.scores.append(score)
         return score
 
     def getScoringFunction(self):
-        dataS = theano.shared(value=self.data, borrow=True, name='data')
+        return np.sum
 
-        D = T.tensor4('data')
-        index = T.lscalar()
-        score = self.getFreeEnergy(D)
-        scoringFun = theano.function([index],
-                                     score,
-                                     allow_input_downcast=True,
-                                     givens={D: dataS[index * self.batchSize:(index + 1) * self.batchSize]},
-                                     name='freeEnergyObservation'
-                                     )
-        return scoringFun
-
-    def getFreeEnergy(self, D):
-        return self.model.meanFreeEnergy(D)
 
 
 class ReconstructionRateObserver(TrainingObserver):
