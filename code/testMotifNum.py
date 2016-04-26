@@ -26,12 +26,12 @@ import theano.tensor as T
 ########################################################
 # SET THE HYPER PARAMETERS
 hyperParams={
-        'number_of_motifs': 1,
-        'motif_length': 9,
-        'learning_rate': 0.5,
+        'number_of_motifs': 10,
+        'motif_length': 7,
+        'learning_rate': .5,
         'doublestranded': True,
         'pooling_factor': 4,
-        'epochs': 400,
+        'epochs': 500,
         'cd_k': 5,
         'sparsity': 0.5,
         'batch_size': 200,
@@ -101,14 +101,14 @@ km_test = dataRead.computeKmerCounts(allTest, 5)
 
 labels_for_svm = np.concatenate( (np.ones(training_stem.shape[0]), -np.ones(training_fibro.shape[0])), axis=0 )
 
-clf = svm.SVC(probability=True)
+clf = svm.SVC(probability=False)
 clf.fit(km_train, labels_for_svm)
-
-scores.append(clf.predict_proba(km_test)[:,1])
+#
+scores.append(clf.decision_function(km_test))
 texts.append('SVM with RBF kernel')
 print "Training SVM complete"
 
-allHyperParams=(1,5,10,50,100)
+allHyperParams=(1,5,10,20,50)
 try:
     for nmot in allHyperParams:
         hyper_params=hyperParams
@@ -143,5 +143,5 @@ finally:
     labels = np.concatenate( (np.ones(test_stem.shape[0]), np.zeros(test_fibro.shape[0])), axis=0 )
     with open('scores_motif_number_test.pkl', 'w') as f:
         cPickle.dump( (scores, texts, labels), f)
-    plotting.plotROC(scores, texts, labels)
+    plotting.plotROC(scores, texts, labels,'roc_nummotifs.png')
 
