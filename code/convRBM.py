@@ -57,7 +57,7 @@ class CRBM:
         self.hyper_params = hyperParams
         x = np.random.randn(self.hyper_params['number_of_motifs'],
                                 1,
-                                4,
+                                self.hyper_params['input_dims'],
                                 self.hyper_params['motif_length']
                                 ).astype(theano.config.floatX)
 
@@ -79,7 +79,7 @@ class CRBM:
         b = b + scipy.stats.norm.ppf(self.hyper_params['rho'], 0, np.sqrt(self.hyper_params['motif_length']))
         self.bias = theano.shared(value=b, name='bias', borrow=True)
 
-        c = np.zeros((1, 4)).astype(theano.config.floatX)
+        c = np.zeros((1, self.hyper_params['input_dims'])).astype(theano.config.floatX)
         self.c = theano.shared(value=c, name='c', borrow=True)
 
         # infrastructural parameters
@@ -138,15 +138,15 @@ class CRBM:
 
     def computeHgivenV(self, data, flip_motif=False):
         # calculate filter(D, W) + b
-        if flip_motif==True:
-          W=self.motifs[:,:,::-1,::-1]
-        else:
-          W=self.motifs
+        #if flip_motif==True:
+          #W=self.motifs[:,:,::-1,::-1]
+        #else:
+        W=self.motifs
 
-        out = conv(data, W, filter_flip=False)
+        out = conv(data, W, filter_flip=flip_motif)
 
         bMod = self.bias
-        bMod = bMod.dimshuffle('x', 1, 0, 'x')  # add dims to the bias until it works
+        bMod = bMod.dimshuffle('x', 1, 0, 'x')  
         out = out + bMod
 
         # perform prob. max pooling g(filter(D,W) + b) and sampling
@@ -157,13 +157,9 @@ class CRBM:
         prob_of_H = pooled[1].dimshuffle(0, 2, 1, 3)
         H = pooled[3].dimshuffle(0, 2, 1, 3)
 
-        if self.debug:
-            prob_of_H = theano.printing.Print('Hidden Probabilites: ')(prob_of_H)
-            H = theano.printing.Print('prob max pooled layer: ')(H)
-
         return [prob_of_H, H]  # only return pooled layer and probs
 
-    def computeVgivenH(self, H_sample):
+    def computeVgivenH(self, H_sample, softmaxdown=True):
 
         W = self.motifs.dimshuffle(1, 0, 2, 3)
         C = conv(H_sample, W, border_mode='full', filter_flip=True)
@@ -174,17 +170,21 @@ class CRBM:
         c_bc = self.c
         c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
         out = out + c_bc
-        prob_of_V = self.softmax(out)
+        if softmaxdown:
+          prob_of_V = self.softmax(out)
+          # now, we still need the sample of V. Compute it here
+          pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape( \
+             (prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
+          V_ = self.theano_rng.multinomial(n=1, 
+               pvals=pV_).astype(theano.config.floatX)
+          V = V_.reshape((prob_of_V.shape[0], 
+              1, prob_of_V.shape[3], 
+              prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
+        else:
+          prob_of_V = self.sigmoid(out)
+          V=self.theano_rng.multinomial(n=1,\
+             pvals=prob_of_V).astype(theano.config.floatX)
 
-        if self.debug:
-            prob_of_V = theano.printing.Print('Softmax V (probabilities for V):')(prob_of_V)
-
-        # now, we still need the sample of V. Compute it here
-        pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
-        V_ = self.theano_rng.multinomial(n=1, pvals=pV_).astype(theano.config.floatX)
-        V = V_.reshape((prob_of_V.shape[0], 1, prob_of_V.shape[3], prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
-        if self.debug:
-            V = theano.printing.Print('Visible Sample: ')(V)
         return [prob_of_V, V]
 
     def computeVgivenHDouble(self, H_sample, H_sample_prime):
@@ -330,26 +330,29 @@ class CRBM:
 
         return updates
 
-    def trainModel(self, trainData):
+    def trainModel(self, training_data,test_data):
         # assert that pooling can be done without rest to the division
         # compute sequence length
-        nseq=int((trainData.shape[3]-self.hyper_params['motif_length'] + 1)/self.hyper_params['pooling_factor'])*\
+        nseq=int((training_data.shape[3]-self.hyper_params['motif_length'] + 1)/self.hyper_params['pooling_factor'])*\
         		self.hyper_params['pooling_factor']+ self.hyper_params['motif_length'] -1
-        trainData=trainData[:,:,:,:nseq]
-
-        assert (((trainData.shape[3]-self.hyper_params['motif_length'] + 1) % self.hyper_params['pooling_factor']) == 0)
+        training_data=training_data[:,:,:,:nseq]
+        nseq=int((test_data.shape[3]-self.hyper_params['motif_length'] + 1)/self.hyper_params['pooling_factor'])*\
+        		self.hyper_params['pooling_factor']+ self.hyper_params['motif_length'] -1
+        test_data=test_data[:,:,:,:nseq]
 
         batchSize = self.hyper_params['batch_size']
         epochs = self.hyper_params['epochs']
         # some debug printing
-        itPerEpoch = trainData.shape[0] / batchSize
+        numTrainingBatches = training_data.shape[0] / batchSize
+        numTestBatches = test_data.shape[0] / batchSize
         print "BatchSize: " + str(batchSize)
-        print "Num of iterations per epoch: " + str(itPerEpoch)
+        print "Num of iterations per epoch: " + str(numTrainingBatches)
         start = time.time()
 
         # compile training function
         print "Start compiling Theano training function..."
-        train_set = theano.shared(value=trainData, borrow=True, name='trainData')
+        train_set = theano.shared(value=training_data, borrow=True, name='trainData')
+        test_set = theano.shared(value=test_data, borrow=True, name='testData')
         index = T.lscalar()
         D = T.tensor4('data')
         updates = self.updateWeightsOnMinibatch(D, self.hyper_params['cd_k'])
@@ -363,6 +366,28 @@ class CRBM:
               },
               name='train_CRBM'
         )
+        index = T.lscalar()
+        D = T.tensor4('data')
+        mfetest = self.meanFreeEnergy(D)
+        feTest = theano.function(
+              [],
+              mfetest,
+              allow_input_downcast=True,
+              givens={
+                D: test_set #[index*batchSize:(index+1)*batchSize]
+              },
+              name='train_CRBM'
+        )
+        mfetrain = self.meanFreeEnergy(D)
+        feTrain = theano.function(
+              [],
+              mfetrain,
+              allow_input_downcast=True,
+              givens={
+                D: train_set #[index*batchSize:(index+1)*batchSize]
+              },
+              name='train_CRBM'
+        )
         print "Compilation of Theano training function finished in " + str(time.time()-start) + " seconds"
 
         # now perform training
@@ -371,8 +396,11 @@ class CRBM:
         #for obs in self.observers:
             #print str(obs.name) + ": " + str(obs.calculateScore())
         for epoch in range(epochs):
-            for batchIdx in range(itPerEpoch):
+            for batchIdx in range(numTrainingBatches):
                 trainingFun(batchIdx)
+            #for batchIdx in range(numTestBatches):
+            print "test-FE:" + str(feTest())
+          #  print "train-FE:" + str(feTrain())
             outstr=""
             for obs in self.observers:
                 outstr=outstr+str(obs.name) + ": " + ("%.4f  " % obs.calculateScore())
@@ -403,22 +431,8 @@ class CRBM:
         return gradKernels, gradBias
 
     def meanFreeEnergy(self, D):
-        #free_energy = 0.0
-        #x = conv(D, self.motifs, filter_flip=False)
-        #bMod = self.bias  # to prevent member from being shuffled
-        #bMod = bMod.dimshuffle('x', 1, 0, 'x')  # add dims to the bias on both sides
-        #x = x + bMod
-        #pool = self.hyper_params['pooling_factor']
-
-        #x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
-        #free_energy = free_energy - T.sum(T.log(1.+T.sum(T.exp(x), axis=4)))
-        
-        #cMod = self.c
-        #cMod = cMod.dimshuffle('x', 0, 1, 'x')  # make it 4D and broadcastable there
-        #free_energy = free_energy - T.sum(D * cMod) 
         return T.sum(self.freeEnergyForData(D))/D.shape[0]
         
-        #return free_energy / (D.shape[0]*D.shape[3])
 
     def freeEnergyForData(self, D):
         pool = self.hyper_params['pooling_factor']
@@ -431,7 +445,7 @@ class CRBM:
         x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
         free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
         if self.hyper_params['doublestranded']:
-          x = conv(D, self.motifs[:,:,::-1,::-1], filter_flip=False)
+          x = conv(D, self.motifs, filter_flip=True)
           bMod = self.bias  # to prevent member from being shuffled
           bMod = bMod.dimshuffle('x', 1, 0, 'x')  # add dims to the bias on both sides
           x = x + bMod

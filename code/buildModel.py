@@ -12,10 +12,10 @@ def buildModelWithObservers(hyperParams, test_data, veri_data):
     model = CRBM(hyperParams=hyperParams)
 
     # add the observers for free energy (test and train)
-    free_energy_observer = observer.FreeEnergyObserver(model, test_data, "FE-test")
-    model.addObserver(free_energy_observer)
-    free_energy_train_observer = observer.FreeEnergyObserver(model, veri_data, "FE-training")
-    model.addObserver(free_energy_train_observer)
+#    free_energy_observer = observer.FreeEnergyObserver(model, test_data, "FE-test")
+#    model.addObserver(free_energy_observer)
+#    free_energy_train_observer = observer.FreeEnergyObserver(model, veri_data, "FE-training")
+#    model.addObserver(free_energy_train_observer)
 
     # add the observers for reconstruction error (test and train)
     #reconstruction_observer = observer.ReconstructionRateObserver(model,
