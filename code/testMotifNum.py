@@ -28,6 +28,7 @@ import theano.tensor as T
 hyperParams={
         'number_of_motifs': 10,
         'motif_length': 7,
+        'input_dims':4,
         'learning_rate': .5,
         'doublestranded': True,
         'pooling_factor': 4,

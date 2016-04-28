@@ -30,10 +30,10 @@ count = 1
 # SET THE HYPER PARAMETERS
 hyperParams={
         'number_of_motifs': 10,
-        'motif_length': 7,
+        'motif_length': 11,
         'input_dims':4,
         'learning_rate': .5,
-        'doublestranded': False,
+        'doublestranded': True,
         'pooling_factor': 4,
         'epochs': 500,
         'cd_k': 5,
@@ -77,9 +77,12 @@ allTraining = np.concatenate( (training_stem, training_fibro), axis=0 )
 print "Data successfully read in " + str((time.time()-start)) + " seconds."
 print "Number of stemcell test samples: " + str(test_stem.shape[0])
 print "Number of fibroblast test samples: " + str(test_fibro.shape[0])
+epochs=[10,20,50,100,150,200,300,500]
 
 try:
+    for epoch in epochs:
         hyper_params=hyperParams
+        hyper_params['epochs']= epoch
         #'number_of_motifs': 1,
         # build model
         learner_stem = buildModel.buildModelWithObservers(hyper_params, test_stem,training_fibro)
@@ -89,8 +92,8 @@ try:
         # train model
         print "Train cRBM for both datasets..."
         start = time.time()
-        learner_stem.trainModel(training_stem)
-        learner_fibro.trainModel(training_fibro)
+        learner_stem.trainModel(training_stem,test_stem)
+        learner_fibro.trainModel(training_fibro,test_fibro)
         
         # evaluate free energy for testing data
         print "Get free energy for both models..."
@@ -99,7 +102,7 @@ try:
         subtracted = score_fibro - score_sc
 
         scores.append(subtracted)
-        texts.append('cRBM with ' + str(hyper_params['number_of_motifs']) + ' motifs')
+        texts.append('cRBM with ' + str(hyper_params['epochs']) + ' epochs')
 
         count += 1
 except KeyboardInterrupt:
@@ -109,5 +112,5 @@ finally:
     labels = np.concatenate( (np.ones(test_stem.shape[0]), np.zeros(test_fibro.shape[0])), axis=0 )
     with open('scores_motif_number_test.pkl', 'w') as f:
         cPickle.dump( (scores, texts, labels), f)
-    plotting.plotROC(scores, texts, labels,'roc_nummotifs.png')
+    plotting.plotROC(scores, texts, labels,'roc_epochs.png')
 
