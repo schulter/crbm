@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 
 from convRBM import CRBM
 import getData as dataRead
-import trainingObserver as observer
-import buildModel
+#import trainingObserver as observer
+#import buildModel
 import plotting
-import freeenergy
+#import freeenergy
 
 import markovModel
 import numpy as np
@@ -30,15 +30,12 @@ hyperParams={
         'motif_length': 7,
         'input_dims':4,
         'learning_rate': .5,
-        'doublestranded': True,
+        'doublestranded': False,
         'pooling_factor': 4,
-        'epochs': 500,
+        'epochs': 100,
         'cd_k': 5,
         'sparsity': 0.5,
         'batch_size': 200,
-        'verbose': False,
-        'cd_method': 'pcd',
-        'momentum': 0.9
     }
 
 train_test_ratio = 0.1
@@ -116,20 +113,22 @@ try:
         #'number_of_motifs': 1,
         hyper_params['number_of_motifs']=nmot
         # build model
-        learner_stem = buildModel.buildModelWithObservers(hyper_params, test_stem,training_fibro)
-        learner_stem.printHyperParams()
-        learner_fibro = buildModel.buildModelWithObservers(hyper_params, test_fibro,training_fibro)
+        crbm_stem = CRBM(hyperParams=hyper_params)
+        #learner_stem = buildModel.buildModelWithObservers(hyper_params, test_stem,training_fibro)
+        crbm_stem.printHyperParams()
+        crbm_fibro = CRBM(hyperParams=hyper_params)
+        #learner_fibro = buildModel.buildModelWithObservers(hyper_params, test_fibro,training_fibro)
 
         # train model
         print "Train cRBM for both datasets..."
         start = time.time()
-        learner_stem.trainModel(training_stem)
-        learner_fibro.trainModel(training_fibro)
+        crbm_stem.trainModel(training_stem,test_stem)
+        crbm_fibro.trainModel(training_fibro,test_fibro)
         
         # evaluate free energy for testing data
         print "Get free energy for both models..."
-        score_sc = freeenergy.getFreeEnergyPoints(learner_stem, allTest)
-        score_fibro = freeenergy.getFreeEnergyPoints(learner_fibro, allTest)
+        score_sc = crbm_stem.getFreeEnergyPoints(allTest)
+        score_fibro = crbm_fibro.getFreeEnergyPoints(allTest)
         subtracted = score_fibro - score_sc
 
         scores.append(subtracted)

@@ -12,6 +12,7 @@ import numpy as np
 import time
 import cPickle
 import pprint
+import lasagne
 
 from utils import max_pool
 
@@ -45,10 +46,10 @@ class CRBM:
                      (1 = equivalent to sigmoid activation)
     """
     def __init__(self, hyperParams=None, file_name=None):
-        
+     
         if file_name is None and hyperParams is None:
             raise ArgumentError('Must Specify Either Filename or Hyper parameters')
-        
+       
         if hyperParams is None:
             self.loadModel(file_name)
             return
@@ -86,30 +87,16 @@ class CRBM:
         self.theano_rng = RS(seed=int(time.time()))
         self.params = [self.motifs, self.bias, self.c]
         
-        self.debug = self.hyper_params['verbose']
-        self.observers = []
-        self.motif_velocity = theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX),
-                                            name='velocity_of_W',
-                                            borrow=True)
-        self.bias_velocity = theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX),
-                                           name='velocity_of_bias',
-                                           borrow=True)
-        self.c_velocity = theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX),
-                                        name='velocity_of_c',
-                                        borrow=True)
-        
         K = self.hyper_params['number_of_motifs']
         
-        if self.hyper_params['cd_method'] == 'pcd':
-            val = np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX)
-            self.fantasy_h = theano.shared(value=val, name='fantasy_h', borrow=True)
-            if self.hyper_params['doublestranded']:
-              self.fantasy_h_prime = theano.shared(value=\
-              		np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX), \
-              		name='fantasy_h_prime', borrow=True)
+        val = np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX)
+        self.fantasy_h = theano.shared(value=val, name='fantasy_h', borrow=True)
+        if self.hyper_params['doublestranded']:
+          self.fantasy_h_prime = theano.shared(value=\
+                    np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX), \
+                    name='fantasy_h_prime', borrow=True)
 
-    def addObserver(self, _observer):
-        self.observers.append(_observer)
+        self.compileTheanoFunctions()
 
     def saveModel(self, _filename):
         numpyParams = []
@@ -137,10 +124,6 @@ class CRBM:
         self.params = [self.motifs, self.bias, self.c]
 
     def computeHgivenV(self, data, flip_motif=False):
-        # calculate filter(D, W) + b
-        #if flip_motif==True:
-          #W=self.motifs[:,:,::-1,::-1]
-        #else:
         W=self.motifs
 
         out = conv(data, W, filter_flip=flip_motif)
@@ -160,12 +143,9 @@ class CRBM:
         return [prob_of_H, H]  # only return pooled layer and probs
 
     def computeVgivenH(self, H_sample, softmaxdown=True):
-
         W = self.motifs.dimshuffle(1, 0, 2, 3)
         C = conv(H_sample, W, border_mode='full', filter_flip=True)
         
-        if self.debug:
-            C = theano.printing.Print('Pre sigmoid visible layer: ')(C)
         out = T.sum(C, axis=1, keepdims=True)  # sum over all K
         c_bc = self.c
         c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
@@ -201,15 +181,10 @@ class CRBM:
         out = out + c_bc
         prob_of_V = self.softmax(out)
 
-        if self.debug:
-            prob_of_V = theano.printing.Print('Softmax V (probabilities for V):')(prob_of_V)
-
         # now, we still need the sample of V. Compute it here
         pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
         V_ = self.theano_rng.multinomial(n=1, pvals=pV_).astype(theano.config.floatX)
         V = V_.reshape((prob_of_V.shape[0], 1, prob_of_V.shape[3], prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
-        if self.debug:
-            V = theano.printing.Print('Visible Sample: ')(V)
         return [prob_of_V, V]
 
     def collectVHStatistics(self, prob_of_H, data):
@@ -269,14 +244,9 @@ class CRBM:
           G_motif_data, G_bias_data, G_c_data = self.collectUpdateStatistics(prob_of_H_given_data, D)
 
         # calculate model probs
-        if self.hyper_params['cd_method'] == 'pcd':
-            H_given_model = self.fantasy_h
-            if self.hyper_params['doublestranded']:
-              H_given_model_prime = self.fantasy_h_prime
-        else:
-            H_given_model = H_given_data
-            if self.hyper_params['doublestranded']:
-              H_given_model_prime = H_given_data_prime
+        H_given_model = self.fantasy_h
+        if self.hyper_params['doublestranded']:
+          H_given_model_prime = self.fantasy_h_prime
 
         for i in range(gibbs_chain_length):
             if self.hyper_params['doublestranded']:
@@ -300,44 +270,94 @@ class CRBM:
         else:
           G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(prob_of_H_given_model, V_given_model)
         
-        mu = self.hyper_params['momentum']
-        alpha = self.hyper_params['learning_rate']
-        sp = self.hyper_params['sparsity']
-
         reg_motif, reg_bias = self.gradientSparsityConstraint(D)
+        gradm=G_motif_data-G_motif_model -self.hyper_params['sparsity']*reg_motif
+        gradb=G_bias_data-G_bias_model-self.hyper_params['sparsity']*reg_bias
+        gradc=G_c_data-G_c_model
+        updates=lasagne.updates.adadelta([gradm,gradb,gradc],[self.motifs,self.bias,self.c])
+        #updates_motif[self.motifs]=lasagne.updates.norm_constraint(updates_motif[self.motifs],10.)
+        #updates_b=lasagne.updates.adadelta([grad],[self.bias])
+        #updates_b=lasagne.updates.norm_constraint(updates_b,10.)
+        #updates_c=lasagne.updates.adadelta([grad],[self.c])
+        #updates_b=lasagne.updates.norm_constraint(updates_b,10.)
 
-        # update the parameters and apply sparsity
-        vmotifs = mu * self.motif_velocity + alpha * (G_motif_data - G_motif_model-sp*reg_motif)
-        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
-        vc = mu*self.c_velocity + alpha * (G_c_data - G_c_model)
+        #updates=updates_motif.copy()
+        #updates.update(updates_b)
+        #updates.update(updates_c)
 
-        new_motifs = self.motifs + vmotifs
-        new_bias = self.bias + vbias
-        new_c = self.c + vc
-
-        if self.hyper_params['cd_method'] == 'pcd':
-          if self.hyper_params['doublestranded']:
-            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
-                       (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
-                       (self.fantasy_h, H_given_model),(self.fantasy_h_prime, H_given_model_prime)]
-          else:
-            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
-                       (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
-                       (self.fantasy_h, H_given_model)]
-        else:
-            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
-                       (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc)]
+        updates.update([(self.fantasy_h, H_given_model)])
+        if self.hyper_params['doublestranded']:
+            updates.update([(self.fantasy_h_prime, H_given_model_prime)])
 
         return updates
+
+    def gradientSparsityConstraint(self, data):
+        # get expected[H|V]
+        prob_of_H, H = self.computeHgivenV(data)
+        gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
+                                                    self.hyper_params['rho'])),
+                             self.motifs)
+        gradBias = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
+                                                 self.hyper_params['rho'])),
+                          self.bias)
+        return gradKernels, gradBias
+
+    def compileTheanoFunctions(self):
+        print "Start compiling Theano training function..."
+        D = T.tensor4('data')
+        updates = self.updateWeightsOnMinibatch(D, self.hyper_params['cd_k'])
+        self.trainingFun = theano.function(
+              [D],
+              None,
+              updates=updates,
+              name='train_CRBM'
+        )
+        #compute mean free energy
+        mfe_ = self.meanFreeEnergy(D)
+        #compute number  of motif hits
+        [_, H] = self.computeHgivenV(D)
+        nmh_=T.mean(H)  # mean over samples (K x 1 x N_h)
+        #nmh_ = self.meanFreeEnergy(D)
+        #compute norm of the motif parameters
+        twn_=lasagne.utils.compute_norms(self.motifs)
+        #compute information content
+        pwm = self.softmax(self.motifs)
+        entropy = -pwm * T.log2(pwm)
+        entropy = T.sum(entropy, axis=2)  # sum over letters
+        ic_= T.log2(self.motifs.shape[2]) - \
+            T.mean(entropy)  # log is possible information due to length of sequence
+        medic_= T.log2(self.motifs.shape[2]) - \
+            T.mean(T.sort(entropy, axis=2)[:, :, entropy.shape[2] // 2])
+        self.evaluateData = theano.function(
+              [D],
+              [mfe_, nmh_],
+              name='evaluationData'
+        )
+        W=T.tensor4("W")
+        self.evaluateParams = theano.function(
+              [],
+              [twn_,ic_,medic_],
+                givens={W:self.motifs},
+              name='evaluationParams'
+        )
+        fed=self.freeEnergyForData(D)
+        self.getFreeEnergyPoints=theano.function( [D],fed,name='fe_per_datapoint')
+        print "Compilation of Theano training function finished"
 
     def trainModel(self, training_data,test_data):
         # assert that pooling can be done without rest to the division
         # compute sequence length
-        nseq=int((training_data.shape[3]-self.hyper_params['motif_length'] + 1)/self.hyper_params['pooling_factor'])*\
-        		self.hyper_params['pooling_factor']+ self.hyper_params['motif_length'] -1
+        nseq=int((training_data.shape[3]-\
+            self.hyper_params['motif_length'] + 1)/\
+            self.hyper_params['pooling_factor'])*\
+            self.hyper_params['pooling_factor']+ \
+            self.hyper_params['motif_length'] -1
         training_data=training_data[:,:,:,:nseq]
-        nseq=int((test_data.shape[3]-self.hyper_params['motif_length'] + 1)/self.hyper_params['pooling_factor'])*\
-        		self.hyper_params['pooling_factor']+ self.hyper_params['motif_length'] -1
+        nseq=int((test_data.shape[3]-\
+            self.hyper_params['motif_length'] + 1)/\
+            self.hyper_params['pooling_factor'])*\
+            self.hyper_params['pooling_factor']+ \
+            self.hyper_params['motif_length'] -1
         test_data=test_data[:,:,:,:nseq]
 
         batchSize = self.hyper_params['batch_size']
@@ -350,85 +370,39 @@ class CRBM:
         start = time.time()
 
         # compile training function
-        print "Start compiling Theano training function..."
-        train_set = theano.shared(value=training_data, borrow=True, name='trainData')
-        test_set = theano.shared(value=test_data, borrow=True, name='testData')
-        index = T.lscalar()
-        D = T.tensor4('data')
-        updates = self.updateWeightsOnMinibatch(D, self.hyper_params['cd_k'])
-        trainingFun = theano.function(
-              [index],
-              None,
-              updates=updates,
-              allow_input_downcast=True,
-              givens={
-                D: train_set[index*batchSize:(index+1)*batchSize]
-              },
-              name='train_CRBM'
-        )
-        index = T.lscalar()
-        D = T.tensor4('data')
-        mfetest = self.meanFreeEnergy(D)
-        feTest = theano.function(
-              [],
-              mfetest,
-              allow_input_downcast=True,
-              givens={
-                D: test_set #[index*batchSize:(index+1)*batchSize]
-              },
-              name='train_CRBM'
-        )
-        mfetrain = self.meanFreeEnergy(D)
-        feTrain = theano.function(
-              [],
-              mfetrain,
-              allow_input_downcast=True,
-              givens={
-                D: train_set #[index*batchSize:(index+1)*batchSize]
-              },
-              name='train_CRBM'
-        )
-        print "Compilation of Theano training function finished in " + str(time.time()-start) + " seconds"
 
         # now perform training
         print "Start training the model..."
         start = time.time()
-        #for obs in self.observers:
-            #print str(obs.name) + ": " + str(obs.calculateScore())
-        for epoch in range(epochs):
-            for batchIdx in range(numTrainingBatches):
-                trainingFun(batchIdx)
-            #for batchIdx in range(numTestBatches):
-            print "test-FE:" + str(feTest())
-          #  print "train-FE:" + str(feTrain())
-            outstr=""
-            for obs in self.observers:
-                outstr=outstr+str(obs.name) + ": " + ("%.4f  " % obs.calculateScore())
 
-            print "Epoch " +str(epoch)+": "+ outstr
-            #print "[Epoch " + str(epoch) + "] done!"
+        for epoch in range(epochs):
+            for [start,end] in self.iterateBatchIndices(\
+                            training_data.shape[0],self.hyper_params['batch_size']):
+                self.trainingFun(training_data[start:end,:,:,:])
+            meanfe=0.0
+            meannmh=0.0
+            nb=0
+            for [start,end] in self.iterateBatchIndices(\
+                            test_data.shape[0],self.hyper_params['batch_size']):
+                [mfe_,nmh_]=self.evaluateData(test_data[start:end,:,:,:])
+                meanfe=meanfe+mfe_
+                meannmh=meannmh+nmh_
+                nb=nb+1
+            [twn_,ic_,medic_]=self.evaluateParams()
+            #for batchIdx in range(numTestBatches):
+            print("Epoch " +str(epoch)+": FE="+str(meanfe/nb)+\
+                    " NumH="+str(meannmh/nb)+\
+                    " WNorm="+str(twn_)+\
+                    " IC="+str(ic_)+\
+                    " medIC="+str(medic_))
+            #print("test-FE:" +str(meanfe/bn))
+            #print("meanNumOfHits:" +str(meannmh/bn))
+            #print("Weight-norm" +twn_)
+            #print("averageIC" +ic_)
+            #print("medianIC" +medic_)
 
         # done with training
         print "Training finished after: " + str(time.time()-start) + " seconds!"
-
-    def gradientSparsityConstraint(self, data):
-        # get expected[H|V]
-        prob_of_H, H = self.computeHgivenV(data)
-        gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-                                     self.hyper_params['rho'])), self.motifs)
-        gradBias = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-                                     self.hyper_params['rho'])), self.bias)
-        if self.hyper_params['doublestranded']:
-          prob_of_H, H = self.computeHgivenV(data,True)
-          gradKernels_prime = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-																self.hyper_params['rho'])), self.motifs)
-          gradBias_prime = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-															self.hyper_params['rho'])), self.bias)
-					#gradKernels=(gradKernels+gradKernels_prime[:,:,::-1,::-1])/2.
-          gradKernels=(gradKernels+gradKernels_prime)/2.
-          gradBias=(gradBias+gradBias_prime)/2.
-
-        return gradKernels, gradBias
 
     def meanFreeEnergy(self, D):
         return T.sum(self.freeEnergyForData(D))/D.shape[0]
@@ -464,3 +438,8 @@ class CRBM:
 
     def printHyperParams(self):
         pprint.pprint(self.hyper_params)
+
+    def iterateBatchIndices(self, totalsize,nbatchsize=1000):
+        return [ [i,i+nbatchsize] if i+nbatchsize<=totalsize \
+                    else [i,totalsize] for i in range(totalsize)[0::nbatchsize] ]
+    
