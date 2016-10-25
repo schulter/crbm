@@ -12,7 +12,6 @@ import numpy as np
 import time
 import cPickle
 import pprint
-import lasagne
 
 from utils import max_pool
 
@@ -286,28 +285,17 @@ class CRBM:
         #sp=0.0
         reg_motif, reg_bias = self.gradientSparsityConstraint(D)
 
-        if False:
-            gradm=G_motif_data-G_motif_model -self.hyper_params['sparsity']*reg_motif
-            gradb=G_bias_data-G_bias_model-self.hyper_params['sparsity']*reg_bias
-            gradc=G_c_data-G_c_model
-            #updates=lasagne.updates.adadelta([-gradm,-gradb,-gradc],[self.motifs,self.bias,self.c])
-            updates=lasagne.updates.nesterov_momentum([gradm,gradb,gradc],[self.motifs,self.bias,self.c],.1)
-            updates.update([(self.fantasy_h, H_given_model)])
-            if self.hyper_params['doublestranded']:
-                updates.update([(self.fantasy_h_prime, H_given_model_prime)])
-        else:
+        vmotifs = mu * self.motif_velocity + alpha * (G_motif_data - G_motif_model-sp*reg_motif)
+        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+        vc = mu*self.c_velocity + alpha * (G_c_data - G_c_model)
 
-            vmotifs = mu * self.motif_velocity + alpha * (G_motif_data - G_motif_model-sp*reg_motif)
-            vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
-            vc = mu*self.c_velocity + alpha * (G_c_data - G_c_model)
+        new_motifs = self.motifs + vmotifs
+        new_bias = self.bias + vbias
+        new_c = self.c + vc
 
-            new_motifs = self.motifs + vmotifs
-            new_bias = self.bias + vbias
-            new_c = self.c + vc
-
-            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
-                       (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
-                       (self.fantasy_h, H_given_model)]
+        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                   (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
+                   (self.fantasy_h, H_given_model)]
 
 
         return updates
