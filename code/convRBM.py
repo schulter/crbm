@@ -132,6 +132,33 @@ class CRBM:
         self.c = theano.shared(value=c, name='c', borrow=True)
         self.params = [self.motifs, self.bias, self.c]
 
+    def bottomUpActivity(self, data, flip_motif=False):
+        W=self.motifs
+
+        out = conv(data, W, filter_flip=flip_motif)
+
+        bMod = self.bias
+        bMod = bMod.dimshuffle('x', 1, 0, 'x')  
+        out = out + bMod
+        return out
+
+    def bottomUpProbs(self,activities):
+        pool = self.hyper_params['pooling_factor']
+        x = activities.reshape((activities.shape[0], activities.shape[1], activities.shape[2], activities.shape[3]//pool, pool))
+        norm=T.sum(1. +T.exp(x), axis=4,keepdims=True)
+        x=x/norm
+        x=x.reshape((activities.shape[0], activities.shape[1], activities.shape[2], activities.shape[3]))
+        return x
+        
+    def bottomUpSample(self,probs):
+        pool = self.hyper_params['pooling_factor']
+        probs=probs.reshape((probs.shape[0], probs.shape[1], probs.shape[2], probs.shape[3]//pool, pool))
+        probs=probs.reshape((probs.shape[0]*probs.shape[1]*probs.shape[2]*probs.shape[3]//pool,pool))
+        samples=self.theano_rng.multinomial(pvals=probs)
+        samples=samples.reshape((probs.shape[0],probs.shape[1],probs.shape[2],probs.shape[3]))
+        return samples
+        
+
     def computeHgivenV(self, data, flip_motif=False):
         W=self.motifs
 
