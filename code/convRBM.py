@@ -87,6 +87,16 @@ class CRBM:
         self.theano_rng = RS(seed=int(time.time()))
         self.params = [self.motifs, self.bias, self.c]
         
+        self.motif_velocity = theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX),
+                                            name='velocity_of_W',
+                                            borrow=True)
+        self.bias_velocity = theano.shared(value=np.zeros(b.shape).astype(theano.config.floatX),
+                                           name='velocity_of_bias',
+                                           borrow=True)
+        self.c_velocity = theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX),
+                                        name='velocity_of_c',
+                                        borrow=True)
+        
         K = self.hyper_params['number_of_motifs']
         
         val = np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX)
@@ -270,24 +280,35 @@ class CRBM:
         else:
           G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(prob_of_H_given_model, V_given_model)
         
+        mu = self.hyper_params['momentum']
+        alpha = self.hyper_params['learning_rate']
+        sp = self.hyper_params['sparsity']
+        #sp=0.0
         reg_motif, reg_bias = self.gradientSparsityConstraint(D)
-        gradm=G_motif_data-G_motif_model -self.hyper_params['sparsity']*reg_motif
-        gradb=G_bias_data-G_bias_model-self.hyper_params['sparsity']*reg_bias
-        gradc=G_c_data-G_c_model
-        updates=lasagne.updates.adadelta([gradm,gradb,gradc],[self.motifs,self.bias,self.c])
-        #updates_motif[self.motifs]=lasagne.updates.norm_constraint(updates_motif[self.motifs],10.)
-        #updates_b=lasagne.updates.adadelta([grad],[self.bias])
-        #updates_b=lasagne.updates.norm_constraint(updates_b,10.)
-        #updates_c=lasagne.updates.adadelta([grad],[self.c])
-        #updates_b=lasagne.updates.norm_constraint(updates_b,10.)
 
-        #updates=updates_motif.copy()
-        #updates.update(updates_b)
-        #updates.update(updates_c)
+        if False:
+            gradm=G_motif_data-G_motif_model -self.hyper_params['sparsity']*reg_motif
+            gradb=G_bias_data-G_bias_model-self.hyper_params['sparsity']*reg_bias
+            gradc=G_c_data-G_c_model
+            #updates=lasagne.updates.adadelta([-gradm,-gradb,-gradc],[self.motifs,self.bias,self.c])
+            updates=lasagne.updates.nesterov_momentum([gradm,gradb,gradc],[self.motifs,self.bias,self.c],.1)
+            updates.update([(self.fantasy_h, H_given_model)])
+            if self.hyper_params['doublestranded']:
+                updates.update([(self.fantasy_h_prime, H_given_model_prime)])
+        else:
 
-        updates.update([(self.fantasy_h, H_given_model)])
-        if self.hyper_params['doublestranded']:
-            updates.update([(self.fantasy_h_prime, H_given_model_prime)])
+            vmotifs = mu * self.motif_velocity + alpha * (G_motif_data - G_motif_model-sp*reg_motif)
+            vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+            vc = mu*self.c_velocity + alpha * (G_c_data - G_c_model)
+
+            new_motifs = self.motifs + vmotifs
+            new_bias = self.bias + vbias
+            new_c = self.c + vc
+
+            updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                       (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
+                       (self.fantasy_h, H_given_model)]
+
 
         return updates
 
@@ -319,7 +340,7 @@ class CRBM:
         nmh_=T.mean(H)  # mean over samples (K x 1 x N_h)
         #nmh_ = self.meanFreeEnergy(D)
         #compute norm of the motif parameters
-        twn_=lasagne.utils.compute_norms(self.motifs)
+        twn_=T.sqrt(T.mean(self.motifs**2))
         #compute information content
         pwm = self.softmax(self.motifs)
         entropy = -pwm * T.log2(pwm)

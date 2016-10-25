@@ -27,15 +27,16 @@ import theano.tensor as T
 # SET THE HYPER PARAMETERS
 hyperParams={
         'number_of_motifs': 10,
-        'motif_length': 7,
+        'motif_length': 15,
         'input_dims':4,
+        'momentum':0.95,
         'learning_rate': .5,
         'doublestranded': False,
         'pooling_factor': 4,
-        'epochs': 100,
+        'epochs': 1000,
         'cd_k': 5,
         'sparsity': 0.5,
-        'batch_size': 200,
+        'batch_size': 1000,
     }
 
 train_test_ratio = 0.1
@@ -66,6 +67,10 @@ test_fibro = np.array([data_fibro[i] for i in itest_fibro])
 
 allTest = np.concatenate( (test_stem, test_fibro), axis=0 )
 allTraining = np.concatenate( (training_stem, training_fibro), axis=0 )
+nseq=int((allTest.shape[3]-hyperParams['motif_length'] + 1)/hyperParams['pooling_factor'])*\
+        		hyperParams['pooling_factor']+ hyperParams['motif_length'] -1
+allTest=allTest[:,:,:,:nseq]
+allTraining=allTraining[:,:,:,:nseq]
 
 
 print "Data successfully read in " + str((time.time()-start)) + " seconds."
@@ -77,36 +82,36 @@ texts = list()
 count = 1
 
 # add the markov model to scores
-print "Training Markov Model on data..."
-mm_sc = markovModel.MarkovModel()
-mm_sc.trainModel(training_stem)
+#print "Training Markov Model on data..."
+#mm_sc = markovModel.MarkovModel()
+#mm_sc.trainModel(training_stem)
 
-mm_fib = markovModel.MarkovModel()
-mm_fib.trainModel(training_fibro)
+#mm_fib = markovModel.MarkovModel()
+#mm_fib.trainModel(training_fibro)
 
-scores_sc = mm_sc.evaluateSequences(allTest)
-scores_fib = mm_fib.evaluateSequences(allTest)
+#scores_sc = mm_sc.evaluateSequences(allTest)
+#scores_fib = mm_fib.evaluateSequences(allTest)
 
-scores.append(scores_sc - scores_fib)
-texts.append('First Order Markov Model')
+#scores.append(scores_sc - scores_fib)
+#texts.append('First Order Markov Model')
 
-print "Training complete!"
+#print "Training complete!"
 
 # add the SVM to the plot
-print "Training SVM on data..."
-km_train = dataRead.computeKmerCounts(allTraining, 5)
-km_test = dataRead.computeKmerCounts(allTest, 5)
+#print "Training SVM on data..."
+#km_train = dataRead.computeKmerCounts(allTraining, 5)
+#km_test = dataRead.computeKmerCounts(allTest, 5)
 
-labels_for_svm = np.concatenate( (np.ones(training_stem.shape[0]), -np.ones(training_fibro.shape[0])), axis=0 )
+#labels_for_svm = np.concatenate( (np.ones(training_stem.shape[0]), -np.ones(training_fibro.shape[0])), axis=0 )
 
-clf = svm.SVC(probability=False)
-clf.fit(km_train, labels_for_svm)
+#clf = svm.SVC(probability=False)
+#clf.fit(km_train, labels_for_svm)
 #
-scores.append(clf.decision_function(km_test))
-texts.append('SVM with RBF kernel')
-print "Training SVM complete"
+##scores.append(clf.decision_function(km_test))
+#texts.append('SVM with RBF kernel')
+#print "Training SVM complete"
 
-allHyperParams=(1,5,10,20,50)
+allHyperParams=(10,5,100,20,50,1)
 try:
     for nmot in allHyperParams:
         hyper_params=hyperParams
