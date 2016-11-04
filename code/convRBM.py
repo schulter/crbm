@@ -133,33 +133,51 @@ class CRBM:
         self.params = [self.motifs, self.bias, self.c]
 
     def bottomUpActivity(self, data, flip_motif=False):
-        W=self.motifs
-
-        out = conv(data, W, filter_flip=flip_motif)
-
-        bMod = self.bias
-        bMod = bMod.dimshuffle('x', 1, 0, 'x')  
-        out = out + bMod
+        out = conv(data, self.motifs, filter_flip=flip_motif)
+        out = out + self.bias.dimshuffle('x', 1, 0, 'x')
         return out
 
-    def bottomUpProbs(self,activities):
+    def bottomUpProbability(self,activities):
         pool = self.hyper_params['pooling_factor']
-        x = activities.reshape((activities.shape[0], activities.shape[1], activities.shape[2], activities.shape[3]//pool, pool))
+        x = activities.reshape((activities.shape[0], \
+                activities.shape[1], activities.shape[2], \
+                activities.shape[3]//pool, pool))
         norm=T.sum(1. +T.exp(x), axis=4,keepdims=True)
-        x=x/norm
-        x=x.reshape((activities.shape[0], activities.shape[1], activities.shape[2], activities.shape[3]))
+        x=T.exp(x)/norm
+        x=x.reshape((activities.shape[0], \
+                activities.shape[1], activities.shape[2], \
+                activities.shape[3]))
         return x
         
     def bottomUpSample(self,probs):
         pool = self.hyper_params['pooling_factor']
-        probs=probs.reshape((probs.shape[0], probs.shape[1], probs.shape[2], probs.shape[3]//pool, pool))
-        probs=probs.reshape((probs.shape[0]*probs.shape[1]*probs.shape[2]*probs.shape[3]//pool,pool))
-        samples=self.theano_rng.multinomial(pvals=probs)
+        _probs=probs.reshape((probs.shape[0], probs.shape[1], probs.shape[2], probs.shape[3]//pool, pool))
+        _probs_reshape=_probs.reshape((_probs.shape[0]*_probs.shape[1]*_probs.shape[2]*_probs.shape[3],pool))
+        samples=self.theano_rng.multinomial(pvals=_probs_reshape)
         samples=samples.reshape((probs.shape[0],probs.shape[1],probs.shape[2],probs.shape[3]))
-        return samples
-        
+        return T.cast(samples,theano.config.floatX)
 
     def computeHgivenV(self, data, flip_motif=False):
+        print("use new implementation")
+        activity=self.bottomUpActivity(data,flip_motif)
+        probability=self.bottomUpProbability(activity)
+        sample=self.bottomUpSample(probability)
+        return [probability, sample]
+
+    def computeHgivenVcheck(self, data, flip_motif=False):
+        out=self.bottomUpActivity(data,flip_motif)
+
+        # perform prob. max pooling g(filter(D,W) + b) and sampling
+        pooled = max_pool(out.dimshuffle(0, 2, 1, 3),
+                              pool_shape=(1, self.hyper_params['pooling_factor']),
+                              theano_rng=self.theano_rng)
+
+        prob_of_H = pooled[1].dimshuffle(0, 2, 1, 3)
+        H = pooled[3].dimshuffle(0, 2, 1, 3)
+
+        return [prob_of_H, H]  # only return pooled layer and probs
+
+    def computeHgivenVold(self, data, flip_motif=False):
         W=self.motifs
 
         out = conv(data, W, filter_flip=flip_motif)
@@ -266,10 +284,10 @@ class CRBM:
     
     def updateWeightsOnMinibatch(self, D, gibbs_chain_length):
         # calculate the data gradient for weights (motifs), bias and c
-        [prob_of_H_given_data, H_given_data] = self.computeHgivenV(D)
+        [prob_of_H_given_data,H_given_data] = self.computeHgivenV(D)
 
         if self.hyper_params['doublestranded']:
-          [prob_of_H_given_data_prime, H_given_data_prime] = self.computeHgivenV(D, True)
+          [prob_of_H_given_data_prime,H_given_data_prime] = self.computeHgivenV(D, True)
 
         # calculate data gradients
 					# if double stranded is true, collect motif hits from both strands
@@ -290,13 +308,88 @@ class CRBM:
               prob_of_V_given_model, V_given_model = \
               		self.computeVgivenHDouble(H_given_model, H_given_model_prime)
               #sample up
-              prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
+              #prob_of_H_given_model=self.bottomUpProbability(self.bottomUpActivity(V_given_model))
+              #H_given_model = self.bottomUpSample(prob_of_H_given_model)
+              #prob_of_H_given_model_prime=self.bottomUpProbability(self.bottomUpActivity(V_given_model,True))
+              #H_given_model_prime = self.bottomUpSample(prob_of_H_given_model)
               prob_of_H_given_model_prime, H_given_model_prime = self.computeHgivenV(V_given_model, True)
+              prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
             else:
 							#sample down
               prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
               #sample up
+              #prob_of_H_given_model=self.bottomUpProbability(self.bottomUpActivity(V_given_model))
+              #H_given_model = self.bottomUpSample(prob_of_H_given_model)
               prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
+        
+        # compute the model gradients
+        if self.hyper_params['doublestranded']:
+          G_motif_model, G_bias_model, G_c_model = \
+          		self.collectUpdateStatisticsDouble(prob_of_H_given_model, prob_of_H_given_model_prime,\
+          		V_given_model)
+        else:
+          G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(prob_of_H_given_model, V_given_model)
+        
+        mu = self.hyper_params['momentum']
+        alpha = self.hyper_params['learning_rate']
+        sp = self.hyper_params['sparsity']
+        #sp=0.0
+        reg_motif, reg_bias = self.gradientSparsityConstraint(D)
+
+        vmotifs = mu * self.motif_velocity + alpha * (G_motif_data - G_motif_model-sp*reg_motif)
+        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+        vc = mu*self.c_velocity + alpha * (G_c_data - G_c_model)
+
+        new_motifs = self.motifs + vmotifs
+        new_bias = self.bias + vbias
+        new_c = self.c + vc
+
+        updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
+                   (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
+                   (self.fantasy_h, H_given_model)]
+
+
+        return updates
+
+
+    def updateWeightsOnMinibatchNew(self, D, gibbs_chain_length):
+        # calculate the data gradient for weights (motifs), bias and c
+        #prob_of_H_given_data = self.bottomUpProbability(D)
+        prob_of_H_given_data = self.bottomUpProbability(self.bottomUpActivity(D))
+
+        if self.hyper_params['doublestranded']:
+          prob_of_H_given_data_prime = self.bottomUpProbability(self.bottomUpActivity(D, True))
+
+        # calculate data gradients
+					# if double stranded is true, collect motif hits from both strands
+        if self.hyper_params['doublestranded']:
+          G_motif_data, G_bias_data, G_c_data = self.collectUpdateStatisticsDouble(prob_of_H_given_data, \
+        		prob_of_H_given_data_prime,D)
+        else:
+          G_motif_data, G_bias_data, G_c_data = self.collectUpdateStatistics(prob_of_H_given_data, D)
+
+        # calculate model probs
+        H_given_model = self.fantasy_h
+        if self.hyper_params['doublestranded']:
+          H_given_model_prime = self.fantasy_h_prime
+
+        for i in range(gibbs_chain_length):
+            if self.hyper_params['doublestranded']:
+							#sample down
+              prob_of_V_given_model, V_given_model = \
+              		self.computeVgivenHDouble(H_given_model, H_given_model_prime)
+              #sample up
+              prob_of_H_given_model=self.bottomUpProbability(self.bottomUpActivity(V_given_model))
+              H_given_model = self.bottomUpSample(prob_of_H_given_model)
+              prob_of_H_given_model_prime=self.bottomUpProbability(self.bottomUpActivity(V_given_model,True))
+              H_given_model_prime = self.bottomUpSample(prob_of_H_given_model)
+              #prob_of_H_given_model_prime, H_given_model_prime = self.computeHgivenV(V_given_model, True)
+            else:
+							#sample down
+              prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
+              #sample up
+              prob_of_H_given_model=self.bottomUpProbability(self.bottomUpActivity(V_given_model))
+              H_given_model = self.bottomUpSample(prob_of_H_given_model)
         
         # compute the model gradients
         if self.hyper_params['doublestranded']:
@@ -329,7 +422,8 @@ class CRBM:
 
     def gradientSparsityConstraint(self, data):
         # get expected[H|V]
-        prob_of_H, H = self.computeHgivenV(data)
+        #prob_of_H = self.bottomUpProbability(self.bottomUpActivity(data))
+        [prob_of_H, _] = self.computeHgivenV(data)
         gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
                                                     self.hyper_params['rho'])),
                              self.motifs)
@@ -352,6 +446,7 @@ class CRBM:
         mfe_ = self.meanFreeEnergy(D)
         #compute number  of motif hits
         [_, H] = self.computeHgivenV(D)
+        #H = self.bottomUpProbability(self.bottomUpActivity(D))
         nmh_=T.mean(H)  # mean over samples (K x 1 x N_h)
         #nmh_ = self.meanFreeEnergy(D)
         #compute norm of the motif parameters
@@ -377,7 +472,18 @@ class CRBM:
               name='evaluationParams'
         )
         fed=self.freeEnergyForData(D)
-        self.getFreeEnergyPoints=theano.function( [D],fed,name='fe_per_datapoint')
+        self.freeEnergy=theano.function( [D],fed,name='fe_per_datapoint')
+
+        if self.hyper_params['doublestranded']:
+            Tfeat=T.mean(self.bottomUpActivity(D)+self.bottomUpActivity(D,True),axis=(2,3))
+        else:
+            Tfeat=T.mean(self.bottomUpActivity(D),axis=(2,3))
+        self.featurize=theano.function([D],Tfeat)
+        if self.hyper_params['doublestranded']:
+            Tfeat=T.mean(self.bottomUpActivity(D)+self.bottomUpActivity(D,True),axis=(2,3))
+        else:
+            Tfeat=T.mean(self.bottomUpProbability(self.bottomUpActivity(D)),axis=(2,3))
+        self.featurize2=theano.function([D],Tfeat)
         print "Compilation of Theano training function finished"
 
     def trainModel(self, training_data,test_data):
@@ -447,21 +553,15 @@ class CRBM:
     def freeEnergyForData(self, D):
         pool = self.hyper_params['pooling_factor']
 
-        x = conv(D, self.motifs, filter_flip=False)
-        bMod = self.bias  # to prevent member from being shuffled
-        bMod = bMod.dimshuffle('x', 1, 0, 'x')  # add dims to the bias on both sides
-        x = x + bMod
+        x=self.bottomUpActivity(D)
 
         x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
         free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
         if self.hyper_params['doublestranded']:
-          x = conv(D, self.motifs, filter_flip=True)
-          bMod = self.bias  # to prevent member from being shuffled
-          bMod = bMod.dimshuffle('x', 1, 0, 'x')  # add dims to the bias on both sides
-          x = x + bMod
+            x=self.bottomUpActivity(D,True)
   
-          x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
-          free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
+            x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
+            free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
         
         cMod = self.c
         cMod = cMod.dimshuffle('x', 0, 1, 'x')  # make it 4D and broadcastable there
