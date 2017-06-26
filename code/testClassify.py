@@ -26,14 +26,14 @@ import theano.tensor as T
 ########################################################
 # SET THE HYPER PARAMETERS
 hyperParams={
-        'number_of_motifs': 42,
+        'number_of_motifs': 10,
         'motif_length': 15,
         'input_dims':4,
         'momentum':0.95,
         'learning_rate': .5,
         'doublestranded': True,
-        'pooling_factor': 4,
-        'epochs': 300,
+        'pooling_factor': 1,
+        'epochs': 100,
         'cd_k': 5,
         'sparsity': 0.5,
         'batch_size': 100,
