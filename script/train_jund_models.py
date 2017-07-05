@@ -21,13 +21,13 @@ hyperParams={
         'motif_length': 15,
         'input_dims':4,
         'momentum':0.95,
-        'learning_rate': .1,
+        'learning_rate': .5,
         'doublestranded': True,
         'pooling_factor': 1,
-        'epochs': 100,
+        'epochs': 300,
         'cd_k': 5,
         'sparsity': 0.5,
-        'batch_size': 20,
+        'batch_size': 100,
     }
 
 np.set_printoptions(precision=4)
@@ -38,36 +38,39 @@ np.set_printoptions(precision=4)
 
 # get the data
 
-training_stem, test_stem = loadSequences('../data/stemcells.fa', \
-        train_test_ratio)
-training_fibro, test_fibro = loadSequences('../data/fibroblast.fa', \
-        train_test_ratio, 4000)
+#cells = ["HepG2", "HCT116", "MCF-7", "GM12878", "A549"]
+cells = ["HepG2_ENCFF002CUF", "K562_ENCFF001VRL", \
+    "HeLa-S3_ENCFF001VIQ", "GM12878_ENCFF002COV", \
+            "H1hesc_ENCFF002CIZ"]
+training = []
+test = []
 
-test_merged = np.concatenate( (test_stem, test_fibro), axis=0 )
-training_merged = np.concatenate( (training_stem, training_fibro), axis=0 )
+for cell in cells:
+    tr, te = loadSequences(
+        '../data/jund_data/{}.fasta'.format(cell), \
+            train_test_ratio, 2000)
+    training.append(tr)
+    test.append(te)
+
+crbm = CRBM(hyperParams=hyperParams)
+
+test_merged = np.concatenate( test, axis=0 )
+
+training_merged = np.concatenate( training, axis=0 )
+
+# clip the sequences if necessary
 nseq=int((test_merged.shape[3]-hyperParams['motif_length'] + \
         1)/hyperParams['pooling_factor'])*\
                 hyperParams['pooling_factor']+ hyperParams['motif_length'] -1
+
 test_merged = test_merged[:,:,:,:nseq]
 training_merged =training_merged[:,:,:,:nseq]
 
-
-# generate cRBM models
-crbm_stem = CRBM(hyperParams=hyperParams)
-crbm_fibro = CRBM(hyperParams=hyperParams)
-crbm_merged = CRBM(hyperParams=hyperParams)
-
-# train model
 print "Train cRBM ..."
 start = time.time()
-crbm_stem.trainModel(training_stem,test_stem)
-crbm_fibro.trainModel(training_fibro,test_fibro)
-crbm_merged.trainModel(training_merged, test_merged)
+crbm.trainModel(training_merged, test_merged)
 
-crbm_stem.saveModel(outputdir + "/stem_model.pkl")
-crbm_fibro.saveModel(outputdir + "/fibro_model.pkl")
-crbm_merged.saveModel(outputdir + "/merged_model.pkl")
+crbm.saveModel(outputdir + "/joint_jund_model.pkl")
 
-joblib.dump((training_stem, test_stem,training_fibro, test_fibro,training_merged,test_merged),
-        outputdir + "dataset.pkl")
+joblib.dump((training, test), outputdir + "jund_dataset.pkl")
 

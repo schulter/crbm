@@ -95,11 +95,16 @@ def computeKmerCounts(data, k):
             countmatrix[i, position] = countmatrix[i, position] + 1
     return countmatrix
 
-def saveModel(model, name):
-		# save trained model to file
-		if not os.path.exists('../../training/' + name):
-		  os.mkdir('../../training/' + name)
-		file_name = "../../training/" + name + "/model.pkl"
-		print "Saving model to " + str(file_name)
-		model.saveModel(file_name)
+def loadSequences(name, training_test_ratio, num_top_regions = None):
+    seqReader = dataRead.SeqReader()
+    seq = seqReader.readSequencesFromFile(name)
+    print(len(seq))
+    if num_top_regions:
+        seq = seq[:num_top_regions]
+    idx_permut = np.random.permutation(len(seq))
+    itest = idx_permut[:int(len(seq)*training_test_ratio)]
+    itrain = idx_permut[int(len(seq)*training_test_ratio):]
+    training_set = np.array([seq[i] for i in itrain])
+    test_set = np.array([seq[i] for i in itest])
+    return training_set, test_set
 

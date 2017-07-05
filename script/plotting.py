@@ -1,52 +1,247 @@
 import matplotlib.pyplot as plt
-import trainingObserver as observer
+import matplotlib.cm as cm
 from sklearn.metrics import roc_curve, auc
+import theano
+import theano.tensor as T
+from matplotlib import gridspec
+from weblogolib import LogoData, LogoFormat, LogoOptions, Alphabet
+from weblogolib import classic, png_print_formatter, png_formatter
+from cStringIO import StringIO
+import numpy as np
+from sklearn.manifold import TSNE
+from sklearn import metrics
+import getData as dataRead
+import pandas as pd
+import seaborn as sns
 
-def plotFE(model):
-    # save trained model to file
-
-		# plot
-		plt.subplot(2, 1, 1)
-		plt.ylabel('Free energy')
-		title = "%f lr %d kmers %d numOfMotifs %d cd_k" % (model.hyper_params['learning_rate'],
-																												model.hyper_params['motif_length'],
-																												model.hyper_params['number_of_motifs'],
-																												model.hyper_params['cd_k'])
-		plt.title(title)
-
-		plt.plot(observer.getObserver(model, "FE-test").scores)
-		plt.plot(observer.getObserver(model, "FE-training").scores)
-
-		plt.subplot(2, 1, 2)
-		plt.ylabel('Reconstruction rate')
-		plt.xlabel('Number Of Epoch')
-
-		plt.plot(observer.getObserver(model, "Recon-test").scores)
-		plt.plot(observer.getObserver(model, "Recon-training").scores)
-
-		# save plot to file
-		file_name_plot = "./errorPlot.png"
-		plt.savefig(file_name_plot)
+def createWeblogo(pwm, highRes=False):
+    alph = Alphabet('ACGT')
+    print pwm.shape
+    weblogoData = LogoData.from_counts(alph, pwm.T)#, c)#, learner.c.get_value().reshape(-1))
+    weblogoOptions = LogoOptions(color_scheme=classic)
+    weblogoFormat = LogoFormat(weblogoData, weblogoOptions)
+    if highRes:
+        x = png_print_formatter(weblogoData, weblogoFormat)
+    else:
+        x = png_formatter(weblogoData, weblogoFormat)
+    fake_file = StringIO(x)
+    return plt.imread(fake_file)
 
 
-def plotROC(scores, texts, labels, filename):
-    assert len(scores) == len(texts) #== len(labels)
-    fig = plt.figure(figsize=(14, 8))
+def plotMotifsWithOccurrences(crbm, seqs, filename = None):
+    # get motifs and hit observer
 
-    for i in range(len(scores)):
-        fpr, tpr, thresholds = roc_curve(y_true=labels, y_score=scores[i])
-        roc_auc = auc(fpr, tpr)
-        plt.plot(fpr, tpr, label=texts[i] + '(AUC = %0.2f)' % roc_auc)
-    
-    # plot the random line
-    plt.plot([0, 1], [0, 1], 'k--', label='Random')
+    pfms = crbm.getPFMs()
 
-    # set general parameters for plotting and so on
-    plt.ylim([0.0, 1.05])
-    plt.xlim([-0.05, 1])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristics for sparsity constraint')
+    h = crbm.getHitProbs(seqs)
+
+    #mean over sequences
+    mh=h.mean(axis=(0,2))
+
+    mean_occurrences = mh.mean(axis=1)
+    sorted_motifs = mean_occurrences.argsort()[::-1]
+
+    fig = plt.figure(figsize=(20, 2*len(pfms)))
+    gs = gridspec.GridSpec(len(pfms), 2, width_ratios=[1, 1])
+    plot_idx = 0
+
+    for m_idx in sorted_motifs:
+        # plot logo
+        ax1 = plt.subplot(gs[plot_idx])
+        logo = createWeblogo(pfms[m_idx])
+        ax1.get_xaxis().set_visible(False)
+        ax1.get_yaxis().set_visible(False)
+        plt.imshow(logo)
+        plt.title('Sequence Logo {}'.format(m_idx))
+        plot_idx += 1
+        ax2 = plt.subplot(gs[plot_idx])
+        ax2.get_xaxis().set_visible(False)
+        plt.bar(range(mh.shape[1]), mh[m_idx])
+        plt.title('Average motif match probability {}'.format(m_idx))
+        plt.xlabel("Position")
+        plot_idx += 1
+
+    if filename:
+        plt.savefig(filename)
+    else:
+        plt.show()
+
+def runTSNEPerPosition(model, seqs):
+
+    hiddenprobs = model.getHitProbs(seqs)
+
+    hreshaped = hiddenprobs.reshape((hiddenprobs.shape[0], 
+        np.prod(hiddenprobs.shape[1:])))
+    model = TSNE()
+    return model.fit_transform(hreshaped)
+
+def runTSNEPerSequence(model, seqs):
+
+    hiddenprobs = model.getHitProbs(seqs)
+    hiddenprobs = hiddenprobs.max(axis=(2,3))
+
+    hreshaped = hiddenprobs.reshape((hiddenprobs.shape[0], 
+        np.prod(hiddenprobs.shape[1:])))
+    model = TSNE()
+    return model.fit_transform(hreshaped)
+
+def plotROC(labels, score, filename = None):
+    auc=metrics.roc_auc_score(labels,score)
+    print("auc: "+str(auc))
+    fpr, tpr, _ = metrics.roc_curve(labels,score)
+    fig = plt.figure(figsize = (5,4))
+    plt.plot(fpr, tpr, label = "auROC= {:1.3f}".format(auc))
+    plt.xlabel("False positive rate")
+    plt.ylabel("True positive rate")
     plt.legend(loc="lower right")
-    fig.savefig(filename, dpi=400)
+    if filename:
+        fig.savefig(filename, dpi=700)
+    else:
+        plt.show()
+
+def plotPRC(labels, score, filename = None):
+    # evaluate the classification performance
+    prc=metrics.average_precision_score(labels,score)
+    print("prc: "+str(prc))
+    prec, rec, _ = metrics.precision_recall_curve(labels,score)
+    fig = plt.figure(figsize = (5,4))
+    plt.plot(rec, prec, label = "auPRC= {:1.3f}".format(prc))
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.legend(loc="lower left")
+    if filename:
+        fig.savefig(filename, dpi=700)
+    else:
+        plt.show()
+
+
+def tsneScatter(data, lims, filename = None):
+
+    fig = plt.figure(figsize=(6, 6))
+
+    colors = cm.brg(np.linspace(0,1,len(data)))
+
+    for name, color  in zip(data, colors):
+        plt.scatter(x=data[name][:,0], y=data[name][:,1], \
+                c=color, label = name, alpha=.3)
+
+    plt.xlim(lims[0][0], lims[1][0])
+    plt.ylim(lims[0][1], lims[1][1])
+
+    plt.legend(loc="lower right")
+    plt.axis('off')
+    if filename:
+        fig.savefig(filename, dpi = 700)
+    else:
+        plt.show()
+
+def plotTSNE_withpie(model, seqs, tsne, lims, filename= None):
+
+    hiddenprobs = model.getHitProbs(seqs)
+    probs = hiddenprobs
+
+    pmin=probs.max(axis=(2,3)).min(axis=0)
+    pmax=probs.max(axis=(0,2,3))
+    pmedian=np.median(probs.max(axis=(2,3)), axis=(0))
+    pcurrent = probs.max(axis = (2,3))
+
+    colors = cm.rainbow(np.linspace(0,1,probs.shape[1]))
+
+    fig = plt.figure(figsize = (6, 6))
+    #given a probability matrix (N x K x 1 x 200)
+    for idx, col in zip(range(probs.shape[1]), colors):
+        
+        markx = [0] + np.cos([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
+        marky = [0] + np.sin([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
+
+        markxy = list(zip(markx, marky))
+
+        #X, Y = tsne[:,0], tsne[:,1]
+        
+        s =150*(pcurrent[:, idx]-pmedian[idx])/(pmax[idx]-pmedian[idx])
+        s[s<=0]=0.
+        plt.scatter(tsne[:,0], tsne[:,1], marker=(markxy, 0),
+                s=s, color = col, label = "Motif " + str(idx), alpha = .6)
+
+    plt.xlim(lims[0][0], lims[1][0])
+    plt.ylim(lims[0][1], lims[1][1])
+    plt.legend(loc="lower right")
+    plt.axis('off')
+    if filename:
+        plt.savefig(filename, dpi=700)
+    else:
+        plt.show()
+
+def plotTSNEPerSequence_withpie(model, seqs, tsne, lims, filename= None):
+
+    hiddenprobs = model.getHitProbs(seqs)
+    probs = hiddenprobs
+
+    pmin=probs.max(axis=(2,3)).min(axis=0)
+    pmax=probs.max(axis=(0,2,3))
+    pmedian=np.median(probs.max(axis=(2,3)), axis=(0))
+    pcurrent = probs.max(axis = (2,3))
+
+    colors = cm.rainbow(np.linspace(0,1,probs.shape[1]))
+    fig = plt.figure(figsize = (6, 6))
+
+    pfms = model.getPFMs()
+    gs = gridspec.GridSpec(len(pfms), 2, width_ratios=[.2, 1])
+    plot_idx = 0
+
+    for m_idx in range(len(pfms)):
+        # plot logo
+        ax1 = plt.subplot(gs[m_idx,0])
+        logo = createWeblogo(pfms[m_idx])
+        ax1.get_xaxis().set_visible(False)
+        ax1.get_yaxis().set_visible(False)
+        plt.imshow(logo)
+        plt.title('Motif {}'.format(m_idx), fontsize = 6)
+        plot_idx += 1
+
+    #given a probability matrix (N x K x 1 x 200)
+    ax1 = plt.subplot(gs[:,1])
+    for idx, col in zip(range(probs.shape[1]), colors):
+        
+        markx = [0] + np.cos([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
+        marky = [0] + np.sin([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
+
+        markxy = list(zip(markx, marky))
+
+        #X, Y = tsne[:,0], tsne[:,1]
+        
+        s =150*(pcurrent[:, idx]-pmedian[idx])/(pmax[idx]-pmedian[idx])
+        s[s<=0]=0.
+        ax1.scatter(tsne[:,0], tsne[:,1], marker=(markxy, 0),
+                s=s, color = col, label = "Motif " + str(idx), alpha = .6)
+
+    plt.xlim(lims[0][0], lims[1][0])
+    plt.ylim(lims[0][1], lims[1][1])
+    ax1.legend(loc="lower right", fontsize = 6)
+    ax1.axis('off')
+    if filename:
+        plt.savefig(filename, dpi=700)
+    else:
+        plt.show()
+
+def violinPlotMotifActivities(model, seqs, labels, filename = None):
+    hiddenprobs = model.getHitProbs(seqs)
+    probs = hiddenprobs
+
+    probs = probs.max(axis=(2,3))
+
+    df = pd.DataFrame(data=probs, columns = [ "Motif "+str(i) \
+            for i in range(probs.shape[1])])
+    df["TF"] = pd.DataFrame(data = pd.Series(labels, name="TF"))
+
+    dfm = pd.melt(df, value_vars = df.columns[:-1], id_vars = "TF")
+    g = sns.violinplot(x='variable', y='value', hue='TF', data=dfm,
+            palette="Set2")
+    g.set_xlabel("Motifs")
+    g.set_ylabel("Motif match probs")
+
+    if filename:
+        plt.savefig(filename, dpi=700)
+    else:
+        plt.show()
 
