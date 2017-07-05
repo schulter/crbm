@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import itertools
 import random
 import time
 from datetime import datetime
@@ -26,6 +27,7 @@ hyperParams={
         'learning_rate': .1,
         'doublestranded': True,
         'pooling_factor': 1,
+        'rho': .01,
         'epochs': 50,
         'cd_k': 5,
         'sparsity': 0.5,
@@ -35,6 +37,7 @@ hyperParams={
 lrates = [0.01, 0.05, 0.1, 0.5, 1.]
 sparsities = [0.0, 0.01, 0.1, 0.5, 1., 10]
 batchsizes = [10, 50, 100, 500]
+rhos = [0.0001, 0.001, 0.01, 0.1]
 
 np.set_printoptions(precision=4)
 train_test_ratio = 0.1
@@ -59,11 +62,12 @@ training_merged =training_merged[:,:,:,:nseq]
 labels = np.concatenate( (np.ones(test_stem.shape[0]), \
         np.zeros(test_fibro.shape[0])), axis=0 )
 
-results = pd.DataFrame(np.zeros((len(lrates)*len(sparsities)*len(batchsizes), 5)),\
-        columns = ["LearningRate", "Sparsity", "Batchsize", "auPRC", "auROC"])
+results = pd.DataFrame(np.zeros((len(lrates)*len(sparsities)*\
+        len(batchsizes)*len(rhos), 6)),\
+        columns = ["LearningRate", "Sparsity", "Batchsize", "rho", "auPRC", "auROC"])
 
 idx=0
-for par in itertools.product(lrates, sparsities, batchsizes):
+for par in itertools.product(lrates, sparsities, batchsizes, rhos):
     # generate cRBM models
     # train model
     print "Train cRBM with lr={:1.2f}, sp={:1.3f}, bs={:3.0f}".format( \
@@ -71,6 +75,7 @@ for par in itertools.product(lrates, sparsities, batchsizes):
     hyperParams['learning_rate'] =par[0]
     hyperParams['sparsity'] =par[1]
     hyperParams['batch_size'] =par[2]
+    hyperParams['rho'] =par[3]
     crbm_stem = CRBM(hyperParams=hyperParams)
     crbm_fibro = CRBM(hyperParams=hyperParams)
     crbm_stem.trainModel(training_stem,test_stem)
@@ -85,6 +90,7 @@ for par in itertools.product(lrates, sparsities, batchsizes):
     results["LearningRate"].iloc[idx]=par[0]
     results["Sparsity"].iloc[idx]=par[1]
     results["Batchsize"].iloc[idx]=par[2]
+    results["rho"].iloc[idx]=par[3]
     results["auPRC"].iloc[idx]=prc
     results["auROC"].iloc[idx]=auc
     idx += 1
