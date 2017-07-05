@@ -96,7 +96,7 @@ def computeKmerCounts(data, k):
     return countmatrix
 
 def loadSequences(name, training_test_ratio, num_top_regions = None):
-    seqReader = dataRead.SeqReader()
+    seqReader = SeqReader()
     seq = seqReader.readSequencesFromFile(name)
     print(len(seq))
     if num_top_regions:
