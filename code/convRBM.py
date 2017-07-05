@@ -13,8 +13,6 @@ import time
 import joblib
 import pprint
 
-from utils import max_pool
-
 """
 This is the actual implementation of our convolutional RBM.
 The class implements only contrastive divergence learning so far
