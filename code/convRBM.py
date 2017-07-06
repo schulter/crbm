@@ -147,11 +147,17 @@ class CRBM:
         return [probability, sample]
 
 
-    def computeVgivenH(self, H_sample, softmaxdown=True):
+    def computeVgivenH(self, H_sample, H_sample_prime, softmaxdown=True):
         W = self.motifs.dimshuffle(1, 0, 2, 3)
         C = conv(H_sample, W, border_mode='full', filter_flip=True)
         
         out = T.sum(C, axis=1, keepdims=True)  # sum over all K
+
+        if H_sample_prime:
+            C = conv(H_sample_prime, W[:,:,::-1,::-1], \
+                    border_mode='full', filter_flip=True)
+            out = out+ T.sum(C, axis=1, keepdims=True)  # sum over all K
+
         c_bc = self.c
         c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
         out = out + c_bc
@@ -170,26 +176,6 @@ class CRBM:
           V=self.theano_rng.multinomial(n=1,\
              pvals=prob_of_V).astype(theano.config.floatX)
 
-        return [prob_of_V, V]
-
-    def computeVgivenHDouble(self, H_sample, H_sample_prime):
-
-        W = self.motifs.dimshuffle(1, 0, 2, 3)
-        C = conv(H_sample, W, border_mode='full', filter_flip=True)
-        out = T.sum(C, axis=1, keepdims=True)  # sum over all K
-
-        C = conv(H_sample_prime, W[:,:,::-1,::-1], border_mode='full', filter_flip=True)
-        out = out+ T.sum(C, axis=1, keepdims=True)  # sum over all K
-
-        c_bc = self.c
-        c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
-        out = out + c_bc
-        prob_of_V = self.softmax(out)
-
-        # now, we still need the sample of V. Compute it here
-        pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape((prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
-        V_ = self.theano_rng.multinomial(n=1, pvals=pV_).astype(theano.config.floatX)
-        V = V_.reshape((prob_of_V.shape[0], 1, prob_of_V.shape[3], prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
         return [prob_of_V, V]
 
     def collectVHStatistics(self, prob_of_H, data):
@@ -217,19 +203,16 @@ class CRBM:
 
         return a
 
-    def collectUpdateStatistics(self, prob_of_H, data):
+    def collectUpdateStatistics(self, prob_of_H, prob_of_H_prime, data):
         average_VH = self.collectVHStatistics(prob_of_H, data)
         average_H = self.collectHStatistics(prob_of_H)
-        average_V = self.collectVStatistics(data)
-        return average_VH, average_H, average_V
-    
-    def collectUpdateStatisticsDouble(self, prob_of_H, prob_of_H_prime, data):
-        average_VH = self.collectVHStatistics(prob_of_H, data)
-        average_H = self.collectHStatistics(prob_of_H)
-        average_VH_prime=self.collectVHStatistics(prob_of_H_prime, data)
-        average_H_prime=self.collectHStatistics(prob_of_H_prime)
-        average_VH=(average_VH+average_VH_prime[:,:,::-1,::-1])/2.
-        average_H=(average_H+average_H_prime)/2.
+
+        if prob_of_H_prime:
+            average_VH_prime=self.collectVHStatistics(prob_of_H_prime, data)
+            average_H_prime=self.collectHStatistics(prob_of_H_prime)
+            average_VH=(average_VH+average_VH_prime[:,:,::-1,::-1])/2.
+            average_H=(average_H+average_H_prime)/2.
+
         average_V = self.collectVStatistics(data)
         return average_VH, average_H, average_V
     
@@ -238,61 +221,63 @@ class CRBM:
         [prob_of_H_given_data,H_given_data] = self.computeHgivenV(D)
 
         if self.hyper_params['doublestranded']:
-          [prob_of_H_given_data_prime,H_given_data_prime] = self.computeHgivenV(D, True)
+            [prob_of_H_given_data_prime,H_given_data_prime] = \
+                    self.computeHgivenV(D, True)
+        else:
+            [prob_of_H_given_data_prime,H_given_data_prime] = [None, None]
 
         # calculate data gradients
-					# if double stranded is true, collect motif hits from both strands
-        if self.hyper_params['doublestranded']:
-          G_motif_data, G_bias_data, G_c_data = self.collectUpdateStatisticsDouble(prob_of_H_given_data, \
-        		prob_of_H_given_data_prime,D)
-        else:
-          G_motif_data, G_bias_data, G_c_data = self.collectUpdateStatistics(prob_of_H_given_data, D)
+        G_motif_data, G_bias_data, G_c_data = \
+                  self.collectUpdateStatistics(prob_of_H_given_data, \
+                  prob_of_H_given_data_prime, D)
 
         # calculate model probs
         H_given_model = self.fantasy_h
         if self.hyper_params['doublestranded']:
-          H_given_model_prime = self.fantasy_h_prime
+            H_given_model_prime = self.fantasy_h_prime
+        else:
+            H_given_model_prime = None
 
         for i in range(gibbs_chain_length):
+            prob_of_V_given_model, V_given_model = \
+                    self.computeVgivenH(H_given_model, H_given_model_prime)
+            #sample up
+            prob_of_H_given_model, H_given_model = \
+                    self.computeHgivenV(V_given_model)
+
             if self.hyper_params['doublestranded']:
-							#sample down
-              prob_of_V_given_model, V_given_model = \
-              		self.computeVgivenHDouble(H_given_model, H_given_model_prime)
-              #sample up
-              prob_of_H_given_model_prime, H_given_model_prime = self.computeHgivenV(V_given_model, True)
-              prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
+                prob_of_H_given_model_prime, H_given_model_prime = \
+                        self.computeHgivenV(V_given_model,  True)
             else:
-							#sample down
-              prob_of_V_given_model, V_given_model = self.computeVgivenH(H_given_model)
-              #sample up
-              prob_of_H_given_model, H_given_model = self.computeHgivenV(V_given_model)
+                prob_of_H_given_model_prime, H_given_model_prime = None, None
         
         # compute the model gradients
-        if self.hyper_params['doublestranded']:
-          G_motif_model, G_bias_model, G_c_model = \
-          		self.collectUpdateStatisticsDouble(prob_of_H_given_model, prob_of_H_given_model_prime,\
-          		V_given_model)
-        else:
-          G_motif_model, G_bias_model, G_c_model = self.collectUpdateStatistics(prob_of_H_given_model, V_given_model)
+        G_motif_model, G_bias_model, G_c_model = \
+                  self.collectUpdateStatistics(prob_of_H_given_model, \
+                  prob_of_H_given_model_prime, V_given_model)
         
         mu = self.hyper_params['momentum']
         alpha = self.hyper_params['learning_rate']
         sp = self.hyper_params['sparsity']
-        #sp=0.0
         reg_motif, reg_bias = self.gradientSparsityConstraint(D)
 
-        vmotifs = mu * self.motif_velocity + alpha * (G_motif_data - G_motif_model-sp*reg_motif)
-        vbias = mu * self.bias_velocity + alpha * (G_bias_data - G_bias_model-sp*reg_bias)
-        vc = mu*self.c_velocity + alpha * (G_c_data - G_c_model)
+        vmotifs = mu * self.motif_velocity + \
+                alpha * (G_motif_data - G_motif_model-sp*reg_motif)
+        vbias = mu * self.bias_velocity + \
+                alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+        vc = mu*self.c_velocity + \
+                alpha * (G_c_data - G_c_model)
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
         new_c = self.c + vc
 
+        
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
                    (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
                    (self.fantasy_h, H_given_model)]
-
+        if self.hyper_params['doublestranded']:
+            updates.append((self.fantasy_h_prime, H_given_model_prime))
 
         return updates
 
