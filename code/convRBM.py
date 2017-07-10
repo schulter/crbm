@@ -75,6 +75,7 @@ class CRBM:
 
         # infrastructural parameters
         self.theano_rng = RS(seed=int(time.time()))
+        self.rng_data_permut = theano.tensor.shared_randomstreams.RandomStreams()
         
         self.motif_velocity = theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX),
                                             name='velocity_of_W',
@@ -281,7 +282,7 @@ class CRBM:
 
         return updates
 
-    def gradientSparsityConstraint(self, data):
+    def gradientSparsityConstraintReLU(self, data):
         # get expected[H|V]
         [prob_of_H, _] = self.computeHgivenV(data)
         gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
@@ -291,6 +292,31 @@ class CRBM:
                                                  self.hyper_params['rho'])),
                           self.bias)
         return gradKernels, gradBias
+
+    def gradientSparsityConstraintEntropy(self, data):
+        # get expected[H|V]
+        [prob_of_H, _] = self.computeHgivenV(data)
+        q = self.hyper_params['rho']
+        p = T.mean(prob_of_H, axis=(0, 2, 3))
+
+        gradKernels = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
+                             self.motifs)
+        gradBias = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
+                          self.bias)
+        return gradKernels, gradBias
+
+    def gradientSparsityConstraint(self, data):
+        # shuffle the dataset to destort the signals
+        # but preserve nucleotide composition
+        #rdata = data[:,:,:,self.rng_data_permut.permutation(n=data.shape[3], size=())]
+        rdata = data
+        if self.hyper_params['sp_method'] == 'relu':
+            return self.gradientSparsityConstraintReLU(rdata)
+        elif self.hyper_params['sp_method'] == 'entropy':
+            return self.gradientSparsityConstraintEntropy(rdata)
+        else:
+            assert False, "sp_method '{}' not defined".format(\
+                    self.hyper_params['sp_method'])
 
     def compileTheanoFunctions(self):
         print "Start compiling Theano training function..."
@@ -388,7 +414,7 @@ class CRBM:
 
         # now perform training
         print "Start training the model..."
-        start = time.time()
+        starttime = time.time()
 
         for epoch in range(epochs):
             for [start,end] in self.iterateBatchIndices(\
@@ -405,14 +431,15 @@ class CRBM:
                 nb=nb+1
             [twn_,ic_,medic_]=self.evaluateParams()
             #for batchIdx in range(numTestBatches):
-            print("Epoch " +str(epoch)+": FE="+str(meanfe/nb)+\
-                    " NumH="+str(meannmh/nb)+\
-                    " WNorm="+str(twn_)+\
-                    " IC="+str(ic_)+\
-                    " medIC="+str(medic_))
+            print("Epoch {:d}: ".format(epoch) + \
+                    "FE={:1.3f} ".format(meanfe/nb) + \
+                    "NumH={:1.4f} ".format(meannmh/nb) + \
+                    "WNorm={:2.2f} ".format(float(twn_)) + \
+                    "IC={:1.3f} medIC={:1.3f}".format(float(ic_), float(medic_)))
 
         # done with training
-        print "Training finished after: " + str(time.time()-start) + " seconds!"
+        print "Training finished after: {:5.2f} seconds!".format(\
+                time.time()-starttime)
 
     def meanFreeEnergy(self, D):
         return T.sum(self.freeEnergyForData(D))/D.shape[0]
