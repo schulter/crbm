@@ -66,17 +66,9 @@ def plotMotifsWithOccurrences(crbm, seqs, filename = None):
     else:
         plt.show()
 
-def runTSNEPerPosition(model, seqs):
-
-    hiddenprobs = model.getHitProbs(seqs)
-
-    hreshaped = hiddenprobs.reshape((hiddenprobs.shape[0], 
-        np.prod(hiddenprobs.shape[1:])))
-    model = TSNE()
-    return model.fit_transform(hreshaped)
-
 def runTSNEPerSequence(model, seqs):
 
+    #hiddenprobs = model.fePerMotif(seqs)
     hiddenprobs = model.getHitProbs(seqs)
     hiddenprobs = hiddenprobs.max(axis=(2,3))
 
@@ -84,36 +76,6 @@ def runTSNEPerSequence(model, seqs):
         np.prod(hiddenprobs.shape[1:])))
     model = TSNE()
     return model.fit_transform(hreshaped)
-
-def plotROC(labels, score, filename = None):
-    auc=metrics.roc_auc_score(labels,score)
-    print("auc: "+str(auc))
-    fpr, tpr, _ = metrics.roc_curve(labels,score)
-    fig = plt.figure(figsize = (5,4))
-    plt.plot(fpr, tpr, label = "auROC= {:1.3f}".format(auc))
-    plt.xlabel("False positive rate")
-    plt.ylabel("True positive rate")
-    plt.legend(loc="lower right")
-    if filename:
-        fig.savefig(filename, dpi=700)
-    else:
-        plt.show()
-
-def plotPRC(labels, score, filename = None):
-    # evaluate the classification performance
-    prc=metrics.average_precision_score(labels,score)
-    print("prc: "+str(prc))
-    prec, rec, _ = metrics.precision_recall_curve(labels,score)
-    fig = plt.figure(figsize = (5,4))
-    plt.plot(rec, prec, label = "auPRC= {:1.3f}".format(prc))
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.legend(loc="lower left")
-    if filename:
-        fig.savefig(filename, dpi=700)
-    else:
-        plt.show()
-
 
 def tsneScatter(data, lims, filename = None):
 
@@ -220,16 +182,17 @@ def plotTSNEPerSequence_withpie(model, seqs, tsne, lims, filename= None):
     ax1.legend(loc="lower right", fontsize = 6)
     ax1.axis('off')
     if filename:
-        plt.savefig(filename, dpi=700)
+        fig.savefig(filename, dpi=700)
     else:
         plt.show()
 
 def violinPlotMotifActivities(model, seqs, labels, filename = None):
     hiddenprobs = model.getHitProbs(seqs)
-    probs = hiddenprobs
+    probs = hiddenprobs.mean(axis=(2,3))
 
-    probs = probs.max(axis=(2,3))
+    probs = probs / np.amax(probs,axis=0, keepdims=True)
 
+    fig = plt.figure(figsize = (8,5))
     df = pd.DataFrame(data=probs, columns = [ "Motif "+str(i) \
             for i in range(probs.shape[1])])
     df["TF"] = pd.DataFrame(data = pd.Series(labels, name="TF"))
@@ -237,11 +200,13 @@ def violinPlotMotifActivities(model, seqs, labels, filename = None):
     dfm = pd.melt(df, value_vars = df.columns[:-1], id_vars = "TF")
     g = sns.violinplot(x='variable', y='value', hue='TF', data=dfm,
             palette="Set2")
+
     g.set_xlabel("Motifs")
-    g.set_ylabel("Motif match probs")
+    g.set_ylabel("Normalized motif match enrichment")
+    #g.set_ylim(0,1)
 
     if filename:
-        plt.savefig(filename, dpi=700)
+        fig.savefig(filename, dpi=700)
     else:
         plt.show()
 
