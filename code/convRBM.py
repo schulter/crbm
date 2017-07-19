@@ -42,35 +42,57 @@ class CRBM:
                      mod(sequenceLength-motifLength+1, poolingFactor) == 0
                      (1 = equivalent to sigmoid activation)
     """
-    def __init__(self, hyperParams):
+    def __init__(self, num_motifs, motif_length, epochs = 100, input_dims=4, \
+            doublestranded = True, batchsize = 20, learning_rate = 0.1, \
+            momentum = 0.95, pooling = 1, cd_k = 5, 
+            rho = 0.01, lambda_rate = 0.1, spmethod = 'entropy'):
      
         # parameters for the motifs
-        self.hyper_params = hyperParams
-        x = np.random.randn(self.hyper_params['number_of_motifs'],
+        self.num_motifs = num_motifs
+        self.motif_length = motif_length
+        self.input_dims = input_dims
+        self.doublestranded = doublestranded
+        self.batchsize = batchsize
+        self.learning_rate = learning_rate
+        self.momentum = momentum
+        self.rho = rho
+        self.lambda_rate = lambda_rate
+        self.pooling = pooling
+        self.cd_k = cd_k
+        self.epochs = epochs
+        self.spmethod = spmethod
+        if self.spmethod == 'relu':
+            self.gradientSparsityConstraint = \
+                self.gradientSparsityConstraintReLU
+        else:
+            self.gradientSparsityConstraint = \
+                self.gradientSparsityConstraintEntropy
+
+        x = np.random.randn(self.num_motifs,
                                 1,
-                                self.hyper_params['input_dims'],
-                                self.hyper_params['motif_length']
+                                self.input_dims,
+                                self.motif_length
                                 ).astype(theano.config.floatX)
 
         self.motifs = theano.shared(value=x, name='W', borrow=True)
         
         # determine the parameter rho for the model if not given
-        if "rho" not in self.hyper_params:
-            rho = 1. / (self.hyper_params['number_of_motifs'] * self.hyper_params['motif_length'])
-            if self.hyper_params['doublestranded']:
+        if not rho:
+            rho = 1. / (self.num_motifs * self.motif_length)
+            if self.doublestranded:
               rho=rho/2.
-            self.hyper_params['rho'] = rho
+            self.rho = rho
         
         # cRBM parameters (2*x to respect both strands of the DNA)
-        b = np.zeros((1, self.hyper_params['number_of_motifs'])).astype(theano.config.floatX)
+        b = np.zeros((1, self.num_motifs)).astype(theano.config.floatX)
 
         # adapt the bias such that it will initially have rho motif hits in H
         # That is, we want to have rho percent of the samples positive
         # randn draws from 'standard normal', this is why we have 0 and 1
-        b = b + scipy.stats.norm.ppf(self.hyper_params['rho'], 0, np.sqrt(self.hyper_params['motif_length']))
+        b = b + scipy.stats.norm.ppf(self.rho, 0, np.sqrt(self.motif_length))
         self.bias = theano.shared(value=b, name='bias', borrow=True)
 
-        c = np.zeros((1, self.hyper_params['input_dims'])).astype(theano.config.floatX)
+        c = np.zeros((1, self.input_dims)).astype(theano.config.floatX)
         self.c = theano.shared(value=c, name='c', borrow=True)
 
         # infrastructural parameters
@@ -87,13 +109,11 @@ class CRBM:
                                         name='velocity_of_c',
                                         borrow=True)
         
-        K = self.hyper_params['number_of_motifs']
-        
-        val = np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX)
+        val = np.zeros((self.batchsize, self.num_motifs, 1, 200)).astype(theano.config.floatX)
         self.fantasy_h = theano.shared(value=val, name='fantasy_h', borrow=True)
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
           self.fantasy_h_prime = theano.shared(value=\
-                    np.zeros((self.hyper_params['batch_size'], K, 1, 200)).astype(theano.config.floatX), \
+                    np.zeros((self.batchsize, self.num_motifs, 1, 200)).astype(theano.config.floatX), \
                     name='fantasy_h_prime', borrow=True)
 
         self.compileTheanoFunctions()
@@ -103,18 +123,43 @@ class CRBM:
                 self.bias.get_value(),
                 self.c.get_value())
         
-        pickleObject = (numpyParams, self.hyper_params)
+        hyperparams = ( self.num_motifs,
+        self.motif_length, 
+        self.input_dims,
+        self.doublestranded,
+        self.batchsize, 
+        self.learning_rate, 
+        self.momentum, 
+        self.rho, 
+        self.lambda_rate, 
+        self.pooling, 
+        self.cd_k, 
+        self.epochs, self.spmethod)
+
+        pickleObject = (numpyParams, hyperparams)
         joblib.dump(pickleObject, _filename, protocol= 2)
 
-    def loadModel(self, filename):
-        numpyParams, self.hyper_params =joblib.load(filename)
+    @classmethod
+    def loadModel(cls, filename):
+
+        numpyParams, hyperparams =joblib.load(filename)
         
-        # get the cRBM params done
+        (num_motifs, motif_length, input_dims, \
+            doublestranded, batchsize, learning_rate, \
+            momentum, rho, lambda_rate,
+            pooling, cd_k, 
+            epochs, spmethod) = hyperparams
+
+        obj = cls(num_motifs, motif_length, epochs, input_dims, \
+                doublestranded, batchsize, learning_rate, \
+                momentum, pooling, cd_k,
+                rho, lambda_rate, spmethod)
+
         motifs, bias, c = numpyParams
-        self.motifs = theano.shared(value=motifs, name='W', borrow=True)
-        self.bias = theano.shared(value=bias, name='bias', borrow=True)
-        self.c = theano.shared(value=c, name='c', borrow=True)
-        self.compileTheanoFunctions()
+        obj.motifs.set_value(motifs)
+        obj.bias.set_value(bias)
+        obj.c.set_value(c)
+        return obj
 
     def bottomUpActivity(self, data, flip_motif=False):
         out = conv(data, self.motifs, filter_flip=flip_motif)
@@ -122,7 +167,7 @@ class CRBM:
         return out
 
     def bottomUpProbability(self,activities):
-        pool = self.hyper_params['pooling_factor']
+        pool = self.pooling
         x = activities.reshape((activities.shape[0], \
                 activities.shape[1], activities.shape[2], \
                 activities.shape[3]//pool, pool))
@@ -134,7 +179,7 @@ class CRBM:
         return x
         
     def bottomUpSample(self,probs):
-        pool = self.hyper_params['pooling_factor']
+        pool = self.pooling
         _probs=probs.reshape((probs.shape[0], probs.shape[1], probs.shape[2], probs.shape[3]//pool, pool))
         _probs_reshape=_probs.reshape((_probs.shape[0]*_probs.shape[1]*_probs.shape[2]*_probs.shape[3],pool))
         samples=self.theano_rng.multinomial(pvals=_probs_reshape)
@@ -221,7 +266,7 @@ class CRBM:
         # calculate the data gradient for weights (motifs), bias and c
         [prob_of_H_given_data,H_given_data] = self.computeHgivenV(D)
 
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             [prob_of_H_given_data_prime,H_given_data_prime] = \
                     self.computeHgivenV(D, True)
         else:
@@ -234,7 +279,7 @@ class CRBM:
 
         # calculate model probs
         H_given_model = self.fantasy_h
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             H_given_model_prime = self.fantasy_h_prime
         else:
             H_given_model_prime = None
@@ -246,7 +291,7 @@ class CRBM:
             prob_of_H_given_model, H_given_model = \
                     self.computeHgivenV(V_given_model)
 
-            if self.hyper_params['doublestranded']:
+            if self.doublestranded:
                 prob_of_H_given_model_prime, H_given_model_prime = \
                         self.computeHgivenV(V_given_model,  True)
             else:
@@ -257,9 +302,9 @@ class CRBM:
                   self.collectUpdateStatistics(prob_of_H_given_model, \
                   prob_of_H_given_model_prime, V_given_model)
         
-        mu = self.hyper_params['momentum']
-        alpha = self.hyper_params['learning_rate']
-        sp = self.hyper_params['sparsity']
+        mu = self.momentum
+        alpha = self.learning_rate
+        sp = self.lambda_rate
         reg_motif, reg_bias = self.gradientSparsityConstraint(D)
 
         vmotifs = mu * self.motif_velocity + \
@@ -277,7 +322,7 @@ class CRBM:
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
                    (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
                    (self.fantasy_h, H_given_model)]
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             updates.append((self.fantasy_h_prime, H_given_model_prime))
 
         return updates
@@ -286,17 +331,17 @@ class CRBM:
         # get expected[H|V]
         [prob_of_H, _] = self.computeHgivenV(data)
         gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-                                                    self.hyper_params['rho'])),
+                                                    self.rho)),
                              self.motifs)
         gradBias = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-                                                 self.hyper_params['rho'])),
+                                                 self.rho)),
                           self.bias)
         return gradKernels, gradBias
 
     def gradientSparsityConstraintEntropy(self, data):
         # get expected[H|V]
         [prob_of_H, _] = self.computeHgivenV(data)
-        q = self.hyper_params['rho']
+        q = self.rho
         p = T.mean(prob_of_H, axis=(0, 2, 3))
 
         gradKernels = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
@@ -305,23 +350,21 @@ class CRBM:
                           self.bias)
         return gradKernels, gradBias
 
-    def gradientSparsityConstraint(self, data):
-        # shuffle the dataset to destort the signals
-        # but preserve nucleotide composition
-        #rdata = data[:,:,:,self.rng_data_permut.permutation(n=data.shape[3], size=())]
-        rdata = data
-        if self.hyper_params['sp_method'] == 'relu':
-            return self.gradientSparsityConstraintReLU(rdata)
-        elif self.hyper_params['sp_method'] == 'entropy':
-            return self.gradientSparsityConstraintEntropy(rdata)
-        else:
-            assert False, "sp_method '{}' not defined".format(\
-                    self.hyper_params['sp_method'])
+    #def gradientSparsityConstraint(self, data):
+        #return self.gradientSparsityConstraintReLU(data)
+        #rdata = data
+        #if self.hyper_params['sp_method'] == 'relu':
+            #return self.gradientSparsityConstraintReLU(rdata)
+        #elif self.hyper_params['sp_method'] == 'entropy':
+            #return self.gradientSparsityConstraintEntropy(rdata)
+        #else:
+            #assert False, "sp_method '{}' not defined".format(\
+                    #self.hyper_params['sp_method'])
 
     def compileTheanoFunctions(self):
         print "Start compiling Theano training function..."
         D = T.tensor4('data')
-        updates = self.updateWeightsOnMinibatch(D, self.hyper_params['cd_k'])
+        updates = self.updateWeightsOnMinibatch(D, self.cd_k)
         self.trainingFun = theano.function(
               [D],
               None,
@@ -365,18 +408,21 @@ class CRBM:
         fed=self.freeEnergyForData(D)
         self.freeEnergy=theano.function( [D],fed,name='fe_per_datapoint')
 
+        fed=self.freeEnergyPerMotif(D)
+        self.fePerMotif=theano.function( [D],fed,name='fe_per_motif')
+
         
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             Tfeat=T.mean(self.bottomUpActivity(D)+self.bottomUpActivity(D,True),axis=(2,3))
         else:
             Tfeat=T.mean(self.bottomUpActivity(D),axis=(2,3))
         self.featurize=theano.function([D],Tfeat)
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             Tfeat=T.mean(self.bottomUpActivity(D)+self.bottomUpActivity(D,True),axis=(2,3))
         else:
             Tfeat=T.mean(self.bottomUpProbability(self.bottomUpActivity(D)),axis=(2,3))
 
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             self.getHitProbs = theano.function([D], \
                 self.bottomUpProbability(self.bottomUpActivity(D)))
         else:
@@ -385,28 +431,26 @@ class CRBM:
                         self.bottomUpActivity(D, True))))
         print "Compilation of Theano training function finished"
 
-    def trainModel(self, training_data, test_data):
+    def fit(self, training_data, test_data):
         # assert that pooling can be done without rest to the division
         # compute sequence length
         nseq=int((training_data.shape[3]-\
-            self.hyper_params['motif_length'] + 1)/\
-            self.hyper_params['pooling_factor'])*\
-            self.hyper_params['pooling_factor']+ \
-            self.hyper_params['motif_length'] -1
+            self.motif_length + 1)/\
+            self.pooling)*\
+            self.pooling+ \
+            self.motif_length -1
         training_data=training_data[:,:,:,:nseq]
         nseq=int((test_data.shape[3]-\
-            self.hyper_params['motif_length'] + 1)/\
-            self.hyper_params['pooling_factor'])*\
-            self.hyper_params['pooling_factor']+ \
-            self.hyper_params['motif_length'] -1
+            self.motif_length + 1)/\
+            self.pooling)*\
+            self.pooling+ \
+            self.motif_length -1
         test_data=test_data[:,:,:,:nseq]
 
-        batchSize = self.hyper_params['batch_size']
-        epochs = self.hyper_params['epochs']
         # some debug printing
-        numTrainingBatches = training_data.shape[0] / batchSize
-        numTestBatches = test_data.shape[0] / batchSize
-        print "BatchSize: " + str(batchSize)
+        numTrainingBatches = training_data.shape[0] / self.batchsize
+        numTestBatches = test_data.shape[0] / self.batchsize
+        print "BatchSize: " + str(self.batchsize)
         print "Num of iterations per epoch: " + str(numTrainingBatches)
         start = time.time()
 
@@ -416,15 +460,15 @@ class CRBM:
         print "Start training the model..."
         starttime = time.time()
 
-        for epoch in range(epochs):
+        for epoch in range(self.epochs):
             for [start,end] in self.iterateBatchIndices(\
-                            training_data.shape[0],self.hyper_params['batch_size']):
+                            training_data.shape[0],self.batchsize):
                 self.trainingFun(training_data[start:end,:,:,:])
             meanfe=0.0
             meannmh=0.0
             nb=0
             for [start,end] in self.iterateBatchIndices(\
-                            test_data.shape[0],self.hyper_params['batch_size']):
+                            test_data.shape[0],self.batchsize):
                 [mfe_,nmh_]=self.evaluateData(test_data[start:end,:,:,:])
                 meanfe=meanfe+mfe_
                 meannmh=meannmh+nmh_
@@ -454,13 +498,13 @@ class CRBM:
         return [ softmax_(m[0, :, :]) for m in self.motifs.get_value() ]
 
     def freeEnergyForData(self, D):
-        pool = self.hyper_params['pooling_factor']
+        pool = self.pooling
 
         x=self.bottomUpActivity(D)
 
         x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
         free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
-        if self.hyper_params['doublestranded']:
+        if self.doublestranded:
             x=self.bottomUpActivity(D,True)
   
             x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
@@ -472,13 +516,43 @@ class CRBM:
         
         return free_energy/D.shape[3]
 
+    def freeEnergyPerMotif(self, D):
+        pool = self.pooling
+
+        x=self.bottomUpActivity(D)
+
+        x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
+        free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(2, 3))
+
+        if self.doublestranded:
+            x=self.bottomUpActivity(D,True)
+            x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
+            free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(2, 3))
+        
+        cMod = self.c
+        cMod = cMod.dimshuffle('x', 0, 1, 'x')  # make it 4D and broadcastable there
+        free_energy = free_energy - T.sum(D * cMod, axis=(1, 2, 3)).dimshuffle(0, 'x')
+        
+        return free_energy
+
     def softmax(self, x):
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
 
     def printHyperParams(self):
-        pprint.pprint(self.hyper_params)
+        print("num_motifs\t{:d}".format(self.num_motifs))
+        print("motif_length\t {:d}".format(self.motif_length))
+        print("input_dims\t {:d}".format(self.input_dims))
+        print("doublestranded\t {}".format(self.doublestranded))
+        print("batchsize\t {:d}".format(self.batchsize))
+        print("learning_rate\t {:1.3f}".format(self.learning_rate))
+        print("momentum\t {:1.3f}".format(self.momentum))
+        print("rho\t\t {:1.4f}".format(self.rho))
+        print("lambda_rate\t  {:1.3f}".format(self.lambda_rate))
+        print("pooling\t  {:d}".format(self.pooling))
+        print("cd_k\t\t   {:d}".format(self.cd_k))
+        print("epochs\t  {}".format(self.epochs))
 
-    def iterateBatchIndices(self, totalsize,nbatchsize=1000):
+    def iterateBatchIndices(self, totalsize,nbatchsize):
         return [ [i,i+nbatchsize] if i+nbatchsize<=totalsize \
                     else [i,totalsize] for i in range(totalsize)[0::nbatchsize] ]
     
