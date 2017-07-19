@@ -6,68 +6,54 @@ from datetime import datetime
 import joblib
 import os
 import sys
+from sklearn import metrics
 sys.path.append("../code")
 
 from convRBM import CRBM
 import plotting
-from getData import loadSequences
+from getData import seqToOneHot, readSeqsFromFasta
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
 
-########################################################
-# SET THE HYPER PARAMETERS
-hyperParams={
-        'number_of_motifs': 10,
-        'motif_length': 15,
-        'input_dims':4,
-        'momentum':0.95,
-        'learning_rate': .1,
-        'doublestranded': True,
-        'pooling_factor': 1,
-        'epochs': 100,
-        'cd_k': 5,
-        'sparsity': 0.5,
-        'batch_size': 20,
-    }
-
-np.set_printoptions(precision=4)
-train_test_ratio = 0.1
-batchSize = hyperParams['batch_size']
-np.set_printoptions(precision=4)
-########################################################
-
 # get the data
 
-training_stem, test_stem = loadSequences('../data/stemcells.fa', \
-        train_test_ratio)
-training_fibro, test_fibro = loadSequences('../data/fibroblast.fa', \
-        train_test_ratio, 4000)
+tr_o = seqToOneHot(readSeqsFromFasta('../data/stemcells_train.fa'))
+te_o = seqToOneHot(readSeqsFromFasta('../data/stemcells_test.fa'))
+tr_m = seqToOneHot(readSeqsFromFasta('../data/fibroblast_train.fa'))
+te_m = seqToOneHot(readSeqsFromFasta('../data/fibroblast_test.fa'))
 
-test_merged = np.concatenate( (test_stem, test_fibro), axis=0 )
-training_merged = np.concatenate( (training_stem, training_fibro), axis=0 )
-nseq=int((test_merged.shape[3]-hyperParams['motif_length'] + \
-        1)/hyperParams['pooling_factor'])*\
-                hyperParams['pooling_factor']+ hyperParams['motif_length'] -1
-test_merged = test_merged[:,:,:,:nseq]
-training_merged =training_merged[:,:,:,:nseq]
+te_merged = np.concatenate( (te_o, te_m), axis=0 )
+tr_merged = np.concatenate( (tr_o, tr_m), axis=0 )
+labels = np.concatenate( (np.ones(te_o.shape[0]), \
+        np.zeros(te_m.shape[0])), axis=0 )
 
 
 # generate cRBM models
-crbm_stem = CRBM(hyperParams=hyperParams)
-crbm_fibro = CRBM(hyperParams=hyperParams)
-crbm_merged = CRBM(hyperParams=hyperParams)
+crbm_oct4 = CRBM(num_motifs = 10, motif_length = 15, epochs = 300)
+crbm_mafk = CRBM(num_motifs = 10, motif_length = 15, epochs = 300)
 
 # train model
 print "Train cRBM ..."
-start = time.time()
-crbm_stem.trainModel(training_stem,test_stem)
-crbm_fibro.trainModel(training_fibro,test_fibro)
-crbm_merged.trainModel(training_merged, test_merged)
+crbm_oct4.fit(tr_o,te_o)
+crbm_mafk.fit(tr_m,te_m)
 
-crbm_stem.saveModel(outputdir + "/stem_model.pkl")
-crbm_fibro.saveModel(outputdir + "/fibro_model.pkl")
-crbm_merged.saveModel(outputdir + "/merged_model.pkl")
 
-joblib.dump((training_stem, test_stem,training_fibro, test_fibro,training_merged,test_merged),
-        outputdir + "dataset.pkl")
+# evaluate free energy for testing data
+print "Get free energy for both models..."
+score_oct4 = crbm_oct4.freeEnergy(te_merged)
+score_mafk = crbm_mafk.freeEnergy(te_merged)
+score = score_mafk - score_oct4
+
+auc=metrics.roc_auc_score(labels,score)
+print("auc: "+str(auc))
+prc=metrics.average_precision_score(labels,score)
+print("prc: "+str(prc))
+crbm_oct4.printHyperParams()
+
+crbm_merged = CRBM(num_motifs = 10, motif_length = 15, epochs = 300)
+crbm_merged.fit(tr_merged, te_merged)
+
+crbm_oct4.saveModel(outputdir + "/oct4_model.pkl")
+crbm_mafk.saveModel(outputdir + "/mafk_model.pkl")
+crbm_merged.saveModel(outputdir + "/oct4_mafk_joint_model.pkl")
 
