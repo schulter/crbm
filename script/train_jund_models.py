@@ -15,7 +15,7 @@ from getData import seqToOneHot, readSeqsFromFasta
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
 
 # get the data
-cells = ["GM12878", "H1hesc", "Hela", "HepG2", "K562"]
+cells = ["GM12878", "H1hesc", "HeLa-S3", "HepG2", "K562"]
 trsets = []
 tesets = []
 
