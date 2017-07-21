@@ -5,16 +5,18 @@ import seaborn as sns
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
 
-results = pd.read_csv(outputdir + "gridsearch_om_v2.csv", sep="\t", header=None)
+results = pd.read_csv(outputdir + "om_gridsearch.csv", sep="\t", header=None)
 results.columns = ["LearningRate", "Lambda", "Batchsize", "Rho", "SPM", 
-        "Epochs", "auROC","auPRC"]
+        "Epochs", "auROC"]
 
-for col in results.columns[:4]:
+fig, axarr = plt.subplots(2,2, figsize = (8,8))
+for col, ax in zip(results.columns[:4], axarr.reshape((4))):
     #fig, ax = plt.figure(figsize=(7,4))
-    ax = results.boxplot(["auROC","auPRC"], by= col, figsize=(7,4))
+    results.boxplot(["auROC"], by= col, figsize=(7,4), ax = ax)
     #ax = results.boxplot(["auROC","auPRC"], by= ["Lambda", "SPM"], figsize=(7,4))
-    fig = ax[0].get_figure()
-    fig.suptitle('')
-    fig.savefig(outputdir + "grid_{}_om.eps".format(col))
+    fig = ax.get_figure()
+    ax.set_title("")
+    fig.suptitle('auROC')
 
 
+fig.savefig(outputdir + "grid_om.eps")

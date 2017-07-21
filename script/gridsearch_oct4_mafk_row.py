@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import sys
 from sklearn import metrics
+from sklearn.linear_model import LogisticRegression
 sys.path.append("../code")
 
 from convRBM import CRBM
@@ -32,8 +33,6 @@ te_m = seqToOneHot(readSeqsFromFasta('../data/fibroblast_test.fa'))
 
 te_merged = np.concatenate( (te_o, te_m), axis=0 )
 tr_merged = np.concatenate( (tr_o, tr_m), axis=0 )
-labels = np.concatenate( (np.ones(te_o.shape[0]), \
-        np.zeros(te_m.shape[0])), axis=0 )
 
 results = pd.DataFrame(np.zeros((1, 7)),\
         columns = ["LearningRate", "Sparsity", "Batchsize", "rho", "spmethod", \
@@ -42,21 +41,29 @@ results = pd.DataFrame(np.zeros((1, 7)),\
 # generate cRBM models
 # train model
 print "Train cRBM with " + filename
-crbm_stem = CRBM(num_motifs=10, motif_length=15, \
-        learning_rate = lr, lambda_rate = lam,
-        batchsize = bs, rho = rho, epochs = ep, spmethod = spm)
-crbm_fibro = CRBM(num_motifs=10, motif_length=15, \
+crbm = CRBM(num_motifs=10, motif_length=15, \
         learning_rate = lr, lambda_rate = lam,
         batchsize = bs, rho = rho, epochs = ep, spmethod = spm)
 
 idx=0
-crbm_stem.fit(tr_o,te_o)
-crbm_fibro.fit(tr_m,te_o)
+crbm.fit(tr_merged,te_merged)
+#crbm_fibro.fit(tr_m,te_o)
 
-score_sc = crbm_stem.freeEnergy(te_merged)
-score_fibro = crbm_fibro.freeEnergy(te_merged)
-score = score_fibro - score_sc
-auc=metrics.roc_auc_score(labels,score)
+trf = crbm.getHitProbs(tr_merged).sum(axis=(2,3))
+tef = crbm.getHitProbs(te_merged).sum(axis=(2,3))
+
+trl = np.concatenate( (np.ones(tr_o.shape[0]), \
+        np.zeros(tr_m.shape[0])), axis=0 )
+tel = np.concatenate( (np.ones(te_o.shape[0]), \
+        np.zeros(te_m.shape[0])), axis=0 )
+
+lrmodel = LogisticRegression()
+lrmodel.fit(trf, trl)
+pred = lrmodel.decision_function(tef)
+print("")
+
+auc=metrics.roc_auc_score(tel,pred)
+print("auc: {:1.3f}".format(auc))
 
 print("auc: "+str(auc))
 results["LearningRate"].iloc[idx]=lr
@@ -65,7 +72,6 @@ results["Batchsize"].iloc[idx]=bs
 results["rho"].iloc[idx]=rho
 results["spmethod"].iloc[idx]=spm
 results["epochs"].iloc[idx]=ep
-results["auPRC"].iloc[idx]=prc
 results["auROC"].iloc[idx]=auc
 
 print("Finished " + outputdir+filename)
