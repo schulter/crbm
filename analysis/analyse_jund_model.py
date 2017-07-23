@@ -8,24 +8,26 @@ from datetime import datetime
 from sklearn import metrics
 import joblib
 import os
-import sys
 from sklearn.linear_model import LogisticRegression
-sys.path.append("../code")
 
-from convRBM import CRBM
-from getData import seqToOneHot, readSeqsFromFasta
-import plotting
+from crbm import CRBM
+from crbm import seqToOneHot, readSeqsFromFasta
+from crbm import createSeqLogo, positionalDensityPlot
+from crbm import runTSNE, tsneScatter, tsneScatterWithPies
+from crbm import violinPlotMotifMatches
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
 
 def getOneHot(dataset):
-    l = np.concatenate([ np.repeat(i, dataset[i].shape[0]) for i in range(len(dataset)) ])
+    l = np.concatenate([ np.repeat(i, dataset[i].shape[0]) 
+        for i in range(len(dataset)) ])
     eye = np.eye(len(dataset))
     oh = np.asarray([ eye[:,i] for i in l])
     return oh
 
 def getLabels(dataset):
-    l = np.concatenate([ np.repeat(i, dataset[i].shape[0]) for i in range(len(dataset)) ])
+    l = np.concatenate([ np.repeat(i, dataset[i].shape[0]) 
+        for i in range(len(dataset)) ])
     return l
 
 def plotConfusionMatrix(cells, labels, predictions, filename = None):
@@ -57,9 +59,9 @@ tesets = []
 
 for cell in cells:
     trsets.append(seqToOneHot(readSeqsFromFasta(
-    '../data/jund_data/' + cell + '_only_train.fa')))
+    'data/jund_data/' + cell + '_only_train.fa')))
     tesets.append(seqToOneHot(readSeqsFromFasta(
-    '../data/jund_data/' + cell + '_only_test.fa')))
+    'data/jund_data/' + cell + '_only_test.fa')))
 
 te_merged = np.concatenate( tesets, axis=0 )
 tr_merged = np.concatenate( trsets, axis=0 )
@@ -79,11 +81,11 @@ plotConfusionMatrix(cells, tel, pred,
         outputdir + "jund_celltype_discrimination_confmat.eps")
 
 for i in range(len(crbm.getPFMs())):
-    plotting.createSeqLogo(crbm.getPFMs()[i], 
+    createSeqLogo(crbm.getPFMs()[i], 
             outputdir + "crbm_jund_{:d}.eps".format(i))
 
 #per sequence TSNE
-X = plotting.runTSNEPerSequence(crbm, te_merged)
+X = runTSNE(crbm, te_merged)
 lims = (X.min(axis=0)-1, X.max(axis=0)+1)
 
 n = [tesets[0].shape[0] ]
@@ -98,19 +100,18 @@ Xscatter = {}
 for i in range(len(cells)):
     Xscatter[cells[i]] = Xsplit[i]
 
-plotting.tsneScatter(Xscatter, lims, colors, 
-        outputdir + "tsne_jund_celltypes.pdf")
+tsneScatter(Xscatter, lims, colors, outputdir + "tsne_jund_celltypes.pdf")
 
 for cell, color in zip(Xscatter, colors):
-    plotting.tsneScatter({cell:Xscatter[cell]}, lims, [color],
+    tsneScatter({cell:Xscatter[cell]}, lims, [color],
         outputdir + "tsne_jund_celltypes_{}.pdf".format(cell), legend = False)
 
-plotting.plotTSNE_withpie(crbm, te_merged, X, lims,
+tsneScatterWithPies(crbm, te_merged, X, lims,
         outputdir + "tsne_jund_motifcomposition.pdf")
 
 lab = []
 for i in range(len(cells)):
     lab += [ cells[i] ] * tesets[i].shape[0]
 
-plotting.violinPlotMotifActivities(crbm, te_merged, lab, filename =\
+violinPlotMotifActivities(crbm, te_merged, lab, filename =\
         outputdir + "violin_jund_motifcomposition.eps")

@@ -4,10 +4,9 @@ import os
 import sys
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
-sys.path.append("../code")
 
-from convRBM import CRBM
-from getData import seqToOneHot, readSeqsFromFasta
+from crbm import CRBM
+from crbm import seqToOneHot, readSeqsFromFasta
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"] + "/grom/"
 if not os.path.exists(outputdir):

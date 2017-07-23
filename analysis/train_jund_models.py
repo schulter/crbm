@@ -7,10 +7,8 @@ from sklearn import metrics
 import joblib
 import os
 import sys
-sys.path.append("../code")
 
-from convRBM import CRBM
-from getData import seqToOneHot, readSeqsFromFasta
+from crbm import CRBM, seqToOneHot, readSeqsFromFasta
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
 
@@ -21,9 +19,9 @@ tesets = []
 
 for cell in cells:
     trsets.append(seqToOneHot(readSeqsFromFasta(
-    '../data/jund_data/' + cell + '_only_train.fa')))
+    'data/jund_data/' + cell + '_only_train.fa')))
     tesets.append(seqToOneHot(readSeqsFromFasta(
-    '../data/jund_data/' + cell + '_only_test.fa')))
+    'data/jund_data/' + cell + '_only_test.fa')))
 
     crbm = CRBM(num_motifs = 10, motif_length = 15, epochs = 300)
     crbm.fit(trsets[-1], trsets[-1])

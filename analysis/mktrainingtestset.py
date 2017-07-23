@@ -1,7 +1,4 @@
-import sys
-sys.path.append("../code")
-
-from getData import splitTrainingTest, readSeqsFromFasta
+from crbm import splitTrainingTest, readSeqsFromFasta
 
 train_test_ratio = 0.1
 ########################################################
