@@ -6,11 +6,9 @@ from datetime import datetime
 from sklearn import metrics
 import joblib
 import os
-import sys
 from keras.models import Sequential
 from keras.layers import Conv2D, Dense, MaxPooling2D, Flatten
 
-sys.path.append("../code")
 
 from getData import seqToOneHot, readSeqsFromFasta
 

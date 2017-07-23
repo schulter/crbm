@@ -7,20 +7,17 @@ import joblib
 import os
 import sys
 from sklearn import metrics
-sys.path.append("../code")
 
-from convRBM import CRBM
-import plotting
-from getData import seqToOneHot, readSeqsFromFasta
+from crbm import CRBM, seqToOneHot, readSeqsFromFasta
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
 
 # get the data
 
-tr_o = seqToOneHot(readSeqsFromFasta('../data/stemcells_train.fa'))
-te_o = seqToOneHot(readSeqsFromFasta('../data/stemcells_test.fa'))
-tr_m = seqToOneHot(readSeqsFromFasta('../data/fibroblast_train.fa'))
-te_m = seqToOneHot(readSeqsFromFasta('../data/fibroblast_test.fa'))
+tr_o = seqToOneHot(readSeqsFromFasta('data/oct4_mafk_data/stemcells_train.fa'))
+te_o = seqToOneHot(readSeqsFromFasta('data/oct4_mafk_data/stemcells_test.fa'))
+tr_m = seqToOneHot(readSeqsFromFasta('data/oct4_mafk_data/fibroblast_train.fa'))
+te_m = seqToOneHot(readSeqsFromFasta('data/oct4_mafk_data/fibroblast_test.fa'))
 
 te_merged = np.concatenate( (te_o, te_m), axis=0 )
 tr_merged = np.concatenate( (tr_o, tr_m), axis=0 )

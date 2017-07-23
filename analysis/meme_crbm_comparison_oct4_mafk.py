@@ -5,13 +5,11 @@ from Bio.Alphabet import IUPAC
 import os
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
-import sys
-sys.path.append("../code")
-from getData import seqToOneHot, readSeqsFromFasta
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.metrics import roc_curve, precision_recall_curve
 import numpy as np
-from convRBM import CRBM
+from crbm import CRBM
+from crbm import seqToOneHot, readSeqsFromFasta
 
 
 outputdir = os.environ["CRBM_OUTPUT_DIR"]
@@ -132,15 +130,6 @@ print("auPRC: {:1.3f}".format(average_precision_score(tel, pred)))
 appendPlt(tel, pred, "cRBM-all")
 
 
-#createLogo(crbm_oct4.getPFMs()[2], "Oct4-like1")
-#createLogo(crbm_oct4.getPFMs()[5], "Oct4-like2")
-#createLogo(crbm_mafk.getPFMs()[9], "Mafk-like1")
-#createLogo(crbm_mafk.getPFMs()[3], "Mafk-like2")
-# evaluate free energy for testing data
-#print "Get free energy for both models..."
-#score_oct4 = crbm_oct4.freeEnergy(te_merged)
-#score_mafk = crbm_mafk.freeEnergy(te_merged)
-#score = score_mafk - score_oct4
 trf = np.concatenate((crbm_oct4.getHitProbs(tr_merged).sum(axis=(2,3))[:,[2,5]],
     crbm_mafk.getHitProbs(tr_merged).sum(axis=(2,3))[:,[3,9]]), axis =1)
 tef = np.concatenate((crbm_oct4.getHitProbs(te_merged).sum(axis=(2,3))[:,[2,5]],
