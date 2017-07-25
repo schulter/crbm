@@ -13,7 +13,8 @@ config = {
     'install_requires': ['numpy','Biopython','pandas', 'sklearn','Theano',
         'joblib','matplotlib'],
     'packages': ['crbm'],
-    'package_data': {'crbm':['data/*.fa']},
+    'data_files':[("seq", ['data/oct4.fa'])],
+    'zip_safe': False,
     'name': 'crbm'
 }
 

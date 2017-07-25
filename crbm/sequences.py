@@ -2,9 +2,6 @@ import Bio.SeqIO as sio
 from Bio.Alphabet import IUPAC
 from Bio import motifs
 
-import cPickle
-import gzip
-
 import numpy as np
 import re
 import os

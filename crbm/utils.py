@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import pandas as pd
 import matplotlib.cm as cm
 import scipy
 from weblogolib import LogoData, LogoFormat, LogoOptions, Alphabet
@@ -11,7 +12,7 @@ import seaborn as sns
 def createSeqLogos(crbm, path, fformat = 'eps'):
     pfms = crbm.getPFMs()
 
-    for idx in range(len(crbm.getPFMs)):
+    for idx in range(len(crbm.getPFMs())):
         pfm = pfms[i]
         createSeqLogo(pfm, path + "/logo{:d}.{}".format(idx+1, fformat),
                 fformat)
@@ -83,7 +84,7 @@ def tsneScatter(data, lims, colors, filename = None, legend = True):
     else:
         plt.show()
 
-def tsneScatterWithPies(model, seqs, tsne, lims, filename= None):
+def tsneScatterWithPies(model, seqs, tsne, lims = None, filename= None):
 
     hiddenprobs = model.getHitProbs(seqs)
     probs = hiddenprobs
@@ -112,8 +113,9 @@ def tsneScatterWithPies(model, seqs, tsne, lims, filename= None):
         plt.scatter(tsne[:,0], tsne[:,1], marker=(markxy, 0),
                 s=s, color = col, label = "Motif " + str(idx +1), alpha = .6)
 
-    plt.xlim(lims[0][0], lims[1][0])
-    plt.ylim(lims[0][1], lims[1][1])
+    if lims:
+        plt.xlim(lims[0][0], lims[1][0])
+        plt.ylim(lims[0][1], lims[1][1])
     plt.legend(bbox_to_anchor=(1.05,1), loc=2, borderaxespad=0.)
     plt.axis('off')
     if filename:
