@@ -427,8 +427,9 @@ class CRBM:
                 self.bottomUpProbability(self.bottomUpActivity(D)))
         else:
             self.getHitProbs = theano.function([D], \
-                self.bottomUpProbability( T.maximum(self.bottomUpActivity(D),
-                        self.bottomUpActivity(D, True))))
+                #self.bottomUpProbability( T.maximum(self.bottomUpActivity(D),
+                self.bottomUpProbability( self.bottomUpActivity(D) + 
+                        self.bottomUpActivity(D, True)))
         print "Compilation of Theano training function finished"
 
     def fit(self, training_data, test_data):

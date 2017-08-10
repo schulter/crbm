@@ -7,7 +7,23 @@ from weblogolib import classic, png_print_formatter, formatters
 import numpy as np
 from sklearn.manifold import TSNE
 import seaborn as sns
+from Bio.motifs.jaspar import write as write_motif
+from Bio.motifs.jaspar import Motif
+import os
 
+def saveMotifs(model, path, name="mot", fformat = 'jaspar'):
+    pfms = model.getPFMs()
+    alphabet = ['A','C','G','T']
+    for i in range(len(pfms)):
+        cnts = {}
+        for c in range(len(alphabet)):
+            cnts[alphabet[c]] = pfms[i][c]
+        mot = Motif(name+str(i+1), name+str(i+1), counts = cnts)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        with open(os.path.join(path, "{}{:d}.{}".format(name, i, "pfm")), "w") as f:
+            f.write(write_motif([mot], fformat))
+        f.close()
 
 def createSeqLogos(crbm, path, fformat = 'eps'):
     pfms = crbm.getPFMs()
@@ -89,7 +105,6 @@ def tsneScatterWithPies(model, seqs, tsne, lims = None, filename= None):
     hiddenprobs = model.getHitProbs(seqs)
     probs = hiddenprobs
 
-    pmin=probs.max(axis=(2,3)).min(axis=0)
     pmax=probs.max(axis=(0,2,3))
     pmedian=np.median(probs.max(axis=(2,3)), axis=(0))
     pcurrent = probs.max(axis = (2,3))
@@ -138,8 +153,8 @@ def violinPlotMotifMatches(model, seqs, labels, filename = None):
     g = sns.violinplot(x='variable', y='value', hue='TF', data=dfm,
             palette="Set2")
 
-    g.set_xlabel("Motifs")
-    g.set_ylabel("Normalized motif match enrichment")
+    g.set_xlabel("")
+    g.set_ylabel("Normalized motif abundance")
     locs, labels = plt.xticks()
     #g.set_xticklabels(rotation=30)
     plt.setp(labels, rotation=30)
