@@ -432,7 +432,7 @@ class CRBM:
                         self.bottomUpActivity(D, True)))
         print "Compilation of Theano training function finished"
 
-    def fit(self, training_data, test_data):
+    def fit(self, training_data, test_data = None):
         # assert that pooling can be done without rest to the division
         # compute sequence length
         nseq=int((training_data.shape[3]-\
@@ -441,12 +441,16 @@ class CRBM:
             self.pooling+ \
             self.motif_length -1
         training_data=training_data[:,:,:,:nseq]
-        nseq=int((test_data.shape[3]-\
-            self.motif_length + 1)/\
-            self.pooling)*\
-            self.pooling+ \
-            self.motif_length -1
-        test_data=test_data[:,:,:,:nseq]
+
+        if test_data:
+            nseq=int((test_data.shape[3]-\
+                self.motif_length + 1)/\
+                self.pooling)*\
+                self.pooling+ \
+                self.motif_length -1
+            test_data=test_data[:,:,:,:nseq]
+        else:
+            test_data = training_data
 
         # some debug printing
         numTrainingBatches = training_data.shape[0] / self.batchsize
