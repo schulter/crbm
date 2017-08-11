@@ -1,4 +1,3 @@
-
 # Theano imports
 import theano
 import theano.tensor as T
@@ -23,29 +22,53 @@ computes probabilities for and samples of the hidden layer distribution.
 
 
 class CRBM:
-    """
-    Initialize the cRBM. The parameters here are global params that should not change
-    during the execution of training or testing and characterize the network.
+    """CRBM class.
 
-    Parameters:
-    _motifLength:    How long are the motifs (position weight matrices PWM). This
-                     This is equivalent to ask what the number of k-mers is.
-                     The current approach only deals with one fixed motif length.
-             
-    _numMotifs:      How many motifs are applied to the sequence, that is how many
-                     hidden units does the network have. Each hidden unit consists
-                     of a vector of size (sequenceLength-motifLength+1)
-                     
-    _poolingFactor:  How many units from the hidden layer are pooled together.
-                     Note that the number has to divide evenly to the length of
-                     the hidden units, that is:
-                     mod(sequenceLength-motifLength+1, poolingFactor) == 0
-                     (1 = equivalent to sigmoid activation)
+    The class :class:`CRBM` implements functionality for
+    a *convolutional restricted Boltzmann machine* (cRBM) that
+    extracts redundant DNA sequence features from a provided set
+    of sequences.
+    The model can subsequently be used to study the sequence content
+    of (e.g. regulatory) sequences, by visualizing the features in terms
+    of sequence logos or in order to cluster the sequences based
+    on sequence content.
+
+    Parameters
+    -----------
+    num_motifs : int
+        Number of motifs.
+    motif_length : int
+        Motif length.
+
+    epochs : int
+        Number of epochs to train (Default: 100).
+    input_dims :int
+        Input dimensions aka alphabet size (Default: 4 for DNA).
+    doublestranded : bool
+        Single strand or both strands. If set to True,
+        both strands are scanned. (Default: True).
+    batchsize : int
+        Batch size (Default: 20).
+    learning_rate : float)
+        Learning rate (Default: 0.1).
+    momentum : float
+        Momentum term (Default: 0.95).
+    pooling : int
+        Pooling factor (not relevant for 
+        cRBM, but for future work) (Default: 1).
+    cd_k : int
+        Number of Gibbs sampling iterations in 
+        each persistent contrastive divergence step (Default: 5).
+    rho : float
+        Target frequency of motif occurrences (Default: 0.01).
+    lambda_rate : float
+        Sparsity enforcement aka penality term (Default: 0.1).
     """
+
     def __init__(self, num_motifs, motif_length, epochs = 100, input_dims=4, \
             doublestranded = True, batchsize = 20, learning_rate = 0.1, \
             momentum = 0.95, pooling = 1, cd_k = 5, 
-            rho = 0.01, lambda_rate = 0.1, spmethod = 'entropy'):
+            rho = 0.01, lambda_rate = 0.1):
      
         # parameters for the motifs
         self.num_motifs = num_motifs
@@ -60,13 +83,9 @@ class CRBM:
         self.pooling = pooling
         self.cd_k = cd_k
         self.epochs = epochs
-        self.spmethod = spmethod
-        if self.spmethod == 'relu':
-            self.gradientSparsityConstraint = \
-                self.gradientSparsityConstraintReLU
-        else:
-            self.gradientSparsityConstraint = \
-                self.gradientSparsityConstraintEntropy
+        self.spmethod = 'entropy'
+        self.gradientSparsityConstraint = \
+            self.gradientSparsityConstraintEntropy
 
         x = np.random.randn(self.num_motifs,
                                 1,
@@ -116,9 +135,17 @@ class CRBM:
                     np.zeros((self.batchsize, self.num_motifs, 1, 200)).astype(theano.config.floatX), \
                     name='fantasy_h_prime', borrow=True)
 
-        self.compileTheanoFunctions()
+        self._compileTheanoFunctions()
 
-    def saveModel(self, _filename):
+    def saveModel(self, filename):
+        """Save the model parameters and additional hyper-parameters.
+
+        Parameters
+        -----------
+        filename : str
+            Pickle filename where the model parameters are stored.
+        """
+
         numpyParams = (self.motifs.get_value(),
                 self.bias.get_value(),
                 self.c.get_value())
@@ -137,10 +164,17 @@ class CRBM:
         self.epochs, self.spmethod)
 
         pickleObject = (numpyParams, hyperparams)
-        joblib.dump(pickleObject, _filename, protocol= 2)
+        joblib.dump(pickleObject, filename, protocol= 2)
 
     @classmethod
     def loadModel(cls, filename):
+        """Load a model from a given pickle file.
+
+        Parameters
+        -----------
+        filename : str
+            Pickle file containing the model parameters.
+        """
 
         numpyParams, hyperparams =joblib.load(filename)
         
@@ -161,12 +195,16 @@ class CRBM:
         obj.c.set_value(c)
         return obj
 
-    def bottomUpActivity(self, data, flip_motif=False):
+    def _bottomUpActivity(self, data, flip_motif=False):
+        """Theano function for computing bottom up activity."""
+
         out = conv(data, self.motifs, filter_flip=flip_motif)
         out = out + self.bias.dimshuffle('x', 1, 0, 'x')
         return out
 
-    def bottomUpProbability(self,activities):
+    def _bottomUpProbability(self,activities):
+        """Theano function for computing bottom up Probability."""
+
         pool = self.pooling
         x = activities.reshape((activities.shape[0], \
                 activities.shape[1], activities.shape[2], \
@@ -178,7 +216,9 @@ class CRBM:
                 activities.shape[3]))
         return x
         
-    def bottomUpSample(self,probs):
+    def _bottomUpSample(self,probs):
+        """Theano function for bottom up sampling."""
+
         pool = self.pooling
         _probs=probs.reshape((probs.shape[0], probs.shape[1], probs.shape[2], probs.shape[3]//pool, pool))
         _probs_reshape=_probs.reshape((_probs.shape[0]*_probs.shape[1]*_probs.shape[2]*_probs.shape[3],pool))
@@ -186,14 +226,18 @@ class CRBM:
         samples=samples.reshape((probs.shape[0],probs.shape[1],probs.shape[2],probs.shape[3]))
         return T.cast(samples,theano.config.floatX)
 
-    def computeHgivenV(self, data, flip_motif=False):
+    def _computeHgivenV(self, data, flip_motif=False):
+        """Theano function for complete bottom up pass."""
+
         activity=self.bottomUpActivity(data,flip_motif)
         probability=self.bottomUpProbability(activity)
         sample=self.bottomUpSample(probability)
         return [probability, sample]
 
 
-    def computeVgivenH(self, H_sample, H_sample_prime, softmaxdown=True):
+    def _computeVgivenH(self, H_sample, H_sample_prime, softmaxdown=True):
+        """Theano function for complete top down pass."""
+
         W = self.motifs.dimshuffle(1, 0, 2, 3)
         C = conv(H_sample, W, border_mode='full', filter_flip=True)
         
@@ -224,7 +268,9 @@ class CRBM:
 
         return [prob_of_V, V]
 
-    def collectVHStatistics(self, prob_of_H, data):
+    def _collectVHStatistics(self, prob_of_H, data):
+        """Theano function for collecting V*H statistics."""
+
         # reshape input
         data = data.dimshuffle(1, 0, 2, 3)
         prob_of_H = prob_of_H.dimshuffle(1, 0, 2, 3)
@@ -234,7 +280,9 @@ class CRBM:
 
         return avh
 
-    def collectVStatistics(self, data):
+    def _collectVStatistics(self, data):
+        """Theano function for collecting V statistics."""
+
         # reshape input
         a = T.mean(data, axis=(0, 1, 3)).astype(theano.config.floatX)
         a = a.dimshuffle('x', 0)
@@ -242,39 +290,45 @@ class CRBM:
 
         return a
 
-    def collectHStatistics(self, data):
+    def _collectHStatistics(self, data):
+        """Theano function for collecting H statistics."""
+
         # reshape input
         a = T.mean(data, axis=(0, 2, 3)).astype(theano.config.floatX)
         a = a.dimshuffle('x', 0)
 
         return a
 
-    def collectUpdateStatistics(self, prob_of_H, prob_of_H_prime, data):
-        average_VH = self.collectVHStatistics(prob_of_H, data)
-        average_H = self.collectHStatistics(prob_of_H)
+    def _collectUpdateStatistics(self, prob_of_H, prob_of_H_prime, data):
+        """Theano function for collecting the complete update statistics."""
+
+        average_VH = self._collectVHStatistics(prob_of_H, data)
+        average_H = self._collectHStatistics(prob_of_H)
 
         if prob_of_H_prime:
-            average_VH_prime=self.collectVHStatistics(prob_of_H_prime, data)
-            average_H_prime=self.collectHStatistics(prob_of_H_prime)
+            average_VH_prime=self._collectVHStatistics(prob_of_H_prime, data)
+            average_H_prime=self._collectHStatistics(prob_of_H_prime)
             average_VH=(average_VH+average_VH_prime[:,:,::-1,::-1])/2.
             average_H=(average_H+average_H_prime)/2.
 
-        average_V = self.collectVStatistics(data)
+        average_V = self._collectVStatistics(data)
         return average_VH, average_H, average_V
     
-    def updateWeightsOnMinibatch(self, D, gibbs_chain_length):
+    def _updateWeightsOnMinibatch(self, D, gibbs_chain_length):
+        """Theano function that defines an SGD update step with momentum."""
+
         # calculate the data gradient for weights (motifs), bias and c
-        [prob_of_H_given_data,H_given_data] = self.computeHgivenV(D)
+        [prob_of_H_given_data,H_given_data] = self._computeHgivenV(D)
 
         if self.doublestranded:
             [prob_of_H_given_data_prime,H_given_data_prime] = \
-                    self.computeHgivenV(D, True)
+                    self._computeHgivenV(D, True)
         else:
             [prob_of_H_given_data_prime,H_given_data_prime] = [None, None]
 
         # calculate data gradients
         G_motif_data, G_bias_data, G_c_data = \
-                  self.collectUpdateStatistics(prob_of_H_given_data, \
+                  self._collectUpdateStatistics(prob_of_H_given_data, \
                   prob_of_H_given_data_prime, D)
 
         # calculate model probs
@@ -286,26 +340,26 @@ class CRBM:
 
         for i in range(gibbs_chain_length):
             prob_of_V_given_model, V_given_model = \
-                    self.computeVgivenH(H_given_model, H_given_model_prime)
+                    self._computeVgivenH(H_given_model, H_given_model_prime)
             #sample up
             prob_of_H_given_model, H_given_model = \
-                    self.computeHgivenV(V_given_model)
+                    self._computeHgivenV(V_given_model)
 
             if self.doublestranded:
                 prob_of_H_given_model_prime, H_given_model_prime = \
-                        self.computeHgivenV(V_given_model,  True)
+                        self._computeHgivenV(V_given_model,  True)
             else:
                 prob_of_H_given_model_prime, H_given_model_prime = None, None
         
         # compute the model gradients
         G_motif_model, G_bias_model, G_c_model = \
-                  self.collectUpdateStatistics(prob_of_H_given_model, \
+                  self._collectUpdateStatistics(prob_of_H_given_model, \
                   prob_of_H_given_model_prime, V_given_model)
         
         mu = self.momentum
         alpha = self.learning_rate
         sp = self.lambda_rate
-        reg_motif, reg_bias = self.gradientSparsityConstraint(D)
+        reg_motif, reg_bias = self._gradientSparsityConstraint(D)
 
         vmotifs = mu * self.motif_velocity + \
                 alpha * (G_motif_data - G_motif_model-sp*reg_motif)
@@ -327,9 +381,15 @@ class CRBM:
 
         return updates
 
-    def gradientSparsityConstraintReLU(self, data):
+    def _gradientSparsityConstraintReLU(self, data):
+        """Theano function that defines the relu-based sparsity constraint.
+
+        .. warning::
+            This method is deprecated.
+        """
+
         # get expected[H|V]
-        [prob_of_H, _] = self.computeHgivenV(data)
+        [prob_of_H, _] = self._computeHgivenV(data)
         gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
                                                     self.rho)),
                              self.motifs)
@@ -338,9 +398,10 @@ class CRBM:
                           self.bias)
         return gradKernels, gradBias
 
-    def gradientSparsityConstraintEntropy(self, data):
+    def _gradientSparsityConstraintEntropy(self, data):
+        """Theano function that defines the entropy-based sparsity constraint."""
         # get expected[H|V]
-        [prob_of_H, _] = self.computeHgivenV(data)
+        [prob_of_H, _] = self._computeHgivenV(data)
         q = self.rho
         p = T.mean(prob_of_H, axis=(0, 2, 3))
 
@@ -350,22 +411,13 @@ class CRBM:
                           self.bias)
         return gradKernels, gradBias
 
-    #def gradientSparsityConstraint(self, data):
-        #return self.gradientSparsityConstraintReLU(data)
-        #rdata = data
-        #if self.hyper_params['sp_method'] == 'relu':
-            #return self.gradientSparsityConstraintReLU(rdata)
-        #elif self.hyper_params['sp_method'] == 'entropy':
-            #return self.gradientSparsityConstraintEntropy(rdata)
-        #else:
-            #assert False, "sp_method '{}' not defined".format(\
-                    #self.hyper_params['sp_method'])
+    def _compileTheanoFunctions(self):
+        """This methods compiles all theano functions."""
 
-    def compileTheanoFunctions(self):
         print "Start compiling Theano training function..."
         D = T.tensor4('data')
-        updates = self.updateWeightsOnMinibatch(D, self.cd_k)
-        self.trainingFun = theano.function(
+        updates = self._updateWeightsOnMinibatch(D, self.cd_k)
+        self.theano_trainingFun = theano.function(
               [D],
               None,
               updates=updates,
@@ -373,9 +425,9 @@ class CRBM:
         )
 
         #compute mean free energy
-        mfe_ = self.meanFreeEnergy(D)
+        mfe_ = self._meanFreeEnergy(D)
         #compute number  of motif hits
-        [_, H] = self.computeHgivenV(D)
+        [_, H] = self._computeHgivenV(D)
         
         #H = self.bottomUpProbability(self.bottomUpActivity(D))
         nmh_=T.mean(H)  # mean over samples (K x 1 x N_h)
@@ -385,54 +437,127 @@ class CRBM:
         twn_=T.sqrt(T.mean(self.motifs**2))
         
         #compute information content
-        pwm = self.softmax(self.motifs)
+        pwm = self._softmax(self.motifs)
         entropy = -pwm * T.log2(pwm)
         entropy = T.sum(entropy, axis=2)  # sum over letters
         ic_= T.log2(self.motifs.shape[2]) - \
             T.mean(entropy)  # log is possible information due to length of sequence
         medic_= T.log2(self.motifs.shape[2]) - \
             T.mean(T.sort(entropy, axis=2)[:, :, entropy.shape[2] // 2])
-        self.evaluateData = theano.function(
+        self.theano_evaluateData = theano.function(
               [D],
               [mfe_, nmh_],
               name='evaluationData'
         )
 
         W=T.tensor4("W")
-        self.evaluateParams = theano.function(
+        self.theano_evaluateParams = theano.function(
               [],
               [twn_,ic_,medic_],
                 givens={W:self.motifs},
               name='evaluationParams'
         )
-        fed=self.freeEnergyForData(D)
-        self.freeEnergy=theano.function( [D],fed,name='fe_per_datapoint')
+        fed=self._freeEnergyForData(D)
+        self.theano_freeEnergy=theano.function( [D],fed,name='fe_per_datapoint')
 
-        fed=self.freeEnergyPerMotif(D)
-        self.fePerMotif=theano.function( [D],fed,name='fe_per_motif')
+        fed=self._freeEnergyPerMotif(D)
+        self.theano_fePerMotif=theano.function( [D],fed,name='fe_per_motif')
 
         
         if self.doublestranded:
-            Tfeat=T.mean(self.bottomUpActivity(D)+self.bottomUpActivity(D,True),axis=(2,3))
+            Tfeat=T.mean(self._bottomUpActivity(D)+self._bottomUpActivity(D,True),axis=(2,3))
         else:
-            Tfeat=T.mean(self.bottomUpActivity(D),axis=(2,3))
-        self.featurize=theano.function([D],Tfeat)
-        if self.doublestranded:
-            Tfeat=T.mean(self.bottomUpActivity(D)+self.bottomUpActivity(D,True),axis=(2,3))
-        else:
-            Tfeat=T.mean(self.bottomUpProbability(self.bottomUpActivity(D)),axis=(2,3))
+            Tfeat=T.mean(self._bottomUpActivity(D),axis=(2,3))
+        self.theano_featurize=theano.function([D],Tfeat)
 
         if self.doublestranded:
-            self.getHitProbs = theano.function([D], \
-                self.bottomUpProbability(self.bottomUpActivity(D)))
+            self.theano_getHitProbs = theano.function([D], \
+                self._bottomUpProbability(self._bottomUpActivity(D)))
         else:
-            self.getHitProbs = theano.function([D], \
+            self.theano_getHitProbs = theano.function([D], \
                 #self.bottomUpProbability( T.maximum(self.bottomUpActivity(D),
-                self.bottomUpProbability( self.bottomUpActivity(D) + 
-                        self.bottomUpActivity(D, True)))
+                self._bottomUpProbability( self._bottomUpActivity(D) + 
+                        self._bottomUpActivity(D, True)))
         print "Compilation of Theano training function finished"
 
+    def _evaluateData(self, data):
+        """Evaluate performance on given numpy array.
+        
+        This is used to monitor training progress.
+        """
+        return self.theano_evaluateData(data)
+
+    def _trainingFct(self, data):
+        """Train on mini-batch given numpy array."""
+        return self.theano_trainingFct(data)
+
+    def _evaluateParams(self):
+        """Evaluate parameters.
+
+        This is used to monitor training progress.
+        """
+        return self.theano_evaluateParams()
+
+    def motifHitProbs(self, data):
+        """Motif match probabilities.
+
+        Parameters
+        -----------
+        data : numpy-array
+            4D numpy array representing a DNA sequence in one-hot encoding.
+            See :meth:`crbm.sequences.seqToOneHot`.
+
+        returns : numpy-array
+            Per-position motif match probabilities of all motifs as numpy array.
+        """
+        return self.theano_getHitProbs(data)
+
+    def freeEnergy(self, data):
+        """Free energy determined on the given dataset.
+
+        Parameters
+        -----------
+        data : numpy-array
+            4D numpy array representing a DNA sequence in one-hot encoding.
+            See :meth:`crbm.sequences.seqToOneHot`.
+
+        returns : numpy-array
+            Free energy per sequence.
+        """
+        return self.theano_freeEnergy(data)
+
+    def featurize(self, data):
+        """Determines the bottom up activities summed across the sequence length.
+
+        .. warning::
+
+            Deprecated. Avoid using this method.
+
+        Parameters
+        -----------
+        data : numpy-array
+            4D numpy array representing a DNA sequence in one-hot encoding.
+            See :meth:`crbm.sequences.seqToOneHot`.
+
+        returns : numpy-array
+            2D Numpy array containing features.
+        """
+        return self.theano_featurize(data)
+
     def fit(self, training_data, test_data = None):
+        """Fits the cRBM to the provided training sequences.
+
+        Parameters
+        -----------
+        training_data : numpy-array
+            4D-Numpy array representing the training sequence in one-hot encoding.
+            See :meth:`crbm.sequences.seqToOneHot`.
+
+        test_data : numpy-array
+            4D-Numpy array representing the validation sequence in one-hot encoding.
+            If no test_data is provided, the training progress will be reported
+            on the training set itself. See :meth:`crbm.sequences.seqToOneHot`.
+        """
         # assert that pooling can be done without rest to the division
         # compute sequence length
         nseq=int((training_data.shape[3]-\
@@ -466,19 +591,19 @@ class CRBM:
         starttime = time.time()
 
         for epoch in range(self.epochs):
-            for [start,end] in self.iterateBatchIndices(\
+            for [start,end] in self._iterateBatchIndices(\
                             training_data.shape[0],self.batchsize):
-                self.trainingFun(training_data[start:end,:,:,:])
+                self._trainingFun(training_data[start:end,:,:,:])
             meanfe=0.0
             meannmh=0.0
             nb=0
-            for [start,end] in self.iterateBatchIndices(\
+            for [start,end] in self._iterateBatchIndices(\
                             test_data.shape[0],self.batchsize):
-                [mfe_,nmh_]=self.evaluateData(test_data[start:end,:,:,:])
+                [mfe_,nmh_]=self._evaluateData(test_data[start:end,:,:,:])
                 meanfe=meanfe+mfe_
                 meannmh=meannmh+nmh_
                 nb=nb+1
-            [twn_,ic_,medic_]=self.evaluateParams()
+            [twn_,ic_,medic_]=self._evaluateParams()
             #for batchIdx in range(numTestBatches):
             print("Epoch {:d}: ".format(epoch) + \
                     "FE={:1.3f} ".format(meanfe/nb) + \
@@ -490,10 +615,19 @@ class CRBM:
         print "Training finished after: {:5.2f} seconds!".format(\
                 time.time()-starttime)
 
-    def meanFreeEnergy(self, D):
-        return T.sum(self.freeEnergyForData(D))/D.shape[0]
+    def _meanFreeEnergy(self, D):
+        """Theano function for computing the mean free energy."""
+        return T.sum(self._freeEnergyForData(D))/D.shape[0]
         
     def getPFMs(self):
+        """Returns the weight matrices converted to *position frequency matrices*.
+
+        Parameters
+        -----------
+        returns: numpy-array
+            List of position frequency matrices as numpy arrays.
+        """
+
         def softmax_(x):
             x_exp = np.exp(x)
             y = np.zeros(x.shape)
@@ -502,15 +636,17 @@ class CRBM:
             return y
         return [ softmax_(m[0, :, :]) for m in self.motifs.get_value() ]
 
-    def freeEnergyForData(self, D):
+    def _freeEnergyForData(self, D):
+        """Theano function for computing the free energy (per position)."""
+
         pool = self.pooling
 
-        x=self.bottomUpActivity(D)
+        x=self._bottomUpActivity(D)
 
         x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
         free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
         if self.doublestranded:
-            x=self.bottomUpActivity(D,True)
+            x=self._bottomUpActivity(D,True)
   
             x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
             free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
@@ -521,16 +657,18 @@ class CRBM:
         
         return free_energy/D.shape[3]
 
-    def freeEnergyPerMotif(self, D):
+    def _freeEnergyPerMotif(self, D):
+        """Theano function for computing the free energy (per motif)."""
+
         pool = self.pooling
 
-        x=self.bottomUpActivity(D)
+        x=self._bottomUpActivity(D)
 
         x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
         free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(2, 3))
 
         if self.doublestranded:
-            x=self.bottomUpActivity(D,True)
+            x=self._bottomUpActivity(D,True)
             x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
             free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(2, 3))
         
@@ -540,24 +678,32 @@ class CRBM:
         
         return free_energy
 
-    def softmax(self, x):
+    def _softmax(self, x):
+        """Softmax operation."""
+
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
 
-    def printHyperParams(self):
-        print("num_motifs\t{:d}".format(self.num_motifs))
-        print("motif_length\t {:d}".format(self.motif_length))
-        print("input_dims\t {:d}".format(self.input_dims))
-        print("doublestranded\t {}".format(self.doublestranded))
-        print("batchsize\t {:d}".format(self.batchsize))
-        print("learning_rate\t {:1.3f}".format(self.learning_rate))
-        print("momentum\t {:1.3f}".format(self.momentum))
-        print("rho\t\t {:1.4f}".format(self.rho))
-        print("lambda_rate\t  {:1.3f}".format(self.lambda_rate))
-        print("pooling\t  {:d}".format(self.pooling))
-        print("cd_k\t\t   {:d}".format(self.cd_k))
-        print("epochs\t  {}".format(self.epochs))
+    def __str__(self):
+        st = "Parameters:\n\n"
+        st += "Number of motifs: {}\n".format(self.num_motifs)
+        st += "Motif length: {}\n".format(self.motif_length)
+        st += "\n"
+        st += "Hyper-parameters:\n\n"
+        st += "input dims: {:d}".format(self.input_dims)
+        st += "doublestranded: {}".format(self.doublestranded)
+        st += "batchsize: {:d}".format(self.batchsize)
+        st += "learning rate: {:1.3f}".format(self.learning_rate)
+        st += "momentum: {:1.3f}".format(self.momentum)
+        st += "rho: {:1.4f}".format(self.rho)
+        st += "lambda: {:1.3f}".format(self.lambda_rate)
+        st += "pooling: {:d}".format(self.pooling)
+        st += "cd_k: {:d}".format(self.cd_k)
+        st += "epochs: {:d}".format(self.epochs)
+        return st
 
-    def iterateBatchIndices(self, totalsize,nbatchsize):
+    def _iterateBatchIndices(self, totalsize,nbatchsize):
+        """Returns indices in batches."""
+
         return [ [i,i+nbatchsize] if i+nbatchsize<=totalsize \
                     else [i,totalsize] for i in range(totalsize)[0::nbatchsize] ]
     
