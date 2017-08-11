@@ -84,8 +84,8 @@ class CRBM:
         self.cd_k = cd_k
         self.epochs = epochs
         self.spmethod = 'entropy'
-        self.gradientSparsityConstraint = \
-            self.gradientSparsityConstraintEntropy
+        self._gradientSparsityConstraint = \
+            self._gradientSparsityConstraintEntropy
 
         x = np.random.randn(self.num_motifs,
                                 1,
