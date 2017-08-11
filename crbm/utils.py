@@ -177,9 +177,7 @@ def tsneScatter(data, lims = None, colors = None, filename = None, legend = True
     lims : tuple
         Optional parameter containing the x- and y-limits for the figure.
         If None, the limits are automatically determined.
-        For example:
-
-        ([xmin, ymin], [xmax, ymax])
+        For example: ``lims = ([xmin, ymin], [xmax, ymax])``
 
     colors : matplotlib.cm
         Optional colormap to illustrate the datapoints.

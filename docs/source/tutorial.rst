@@ -126,8 +126,7 @@ can be illustrated using
 
 .. code-block:: python
 
-    crbm.positionalDensityPlot(model, onehot[:100], \
-        filename = './densityplot.png')
+    crbm.positionalDensityPlot(model, onehot[:100], filename = './densityplot.png')
 
 
 Clustering analysis
@@ -143,11 +142,11 @@ To that end, we first run TSNE clustering using
     tsne = crbm.runTSNE(model, onehot)
 
     # Visualize the results in a scatter plot
-    crbm.scatterTSNE(model, onehot)
+    crbm.scatterTSNE(model, onehot, filename = './tsnescatter.png')
 
     # Visualize the results in the scatter plot
     # by augmenting with the respective motif abundances
-    crbm.tsneScatterWithPies(model, onehot, tsne, filename = "tsnescatter.png")
+    crbm.tsneScatterWithPies(model, onehot, tsne, filename = "./tsnescatter_pies.png")
 
 Motif enrichment across different sets of sequences
 ---------------------------------------------------
