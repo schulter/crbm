@@ -187,7 +187,7 @@ class CRBM:
         obj = cls(num_motifs, motif_length, epochs, input_dims, \
                 doublestranded, batchsize, learning_rate, \
                 momentum, pooling, cd_k,
-                rho, lambda_rate, spmethod)
+                rho, lambda_rate)
 
         motifs, bias, c = numpyParams
         obj.motifs.set_value(motifs)
