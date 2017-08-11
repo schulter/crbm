@@ -20,6 +20,9 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
+#From: https://stackoverflow.com/questions/12206334/sphinx-autosummary-toctree-contains-reference-to-nonexisting-document-warnings
+numpydoc_show_class_members = False
+
 
 # -- General configuration ------------------------------------------------
 

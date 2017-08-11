@@ -8,17 +8,20 @@ API
 Convolutional restricted Boltzmann machine
 ==========================================
 
-.. autosummary:: 
-
-    crbm.CRBM.fit
-    crbm.CRBM.freeEnergy
-    crbm.CRBM.motifHitProbs
-    crbm.CRBM.getPFMs
-    crbm.CRBM.saveModel
-    crbm.CRBM.loadModel
-
 :class:`CRBM` contains the main functionality of the package
 for training, evaluating and investigating the model.
+
+.. currentmodule:: crbm
+
+.. autosummary:: 
+
+    CRBM.fit
+    CRBM.freeEnergy
+    CRBM.motifHitProbs
+    CRBM.getPFMs
+    CRBM.saveModel
+    CRBM.loadModel
+
 
 .. automodule:: crbm
 
@@ -30,6 +33,8 @@ Sequence-related utilies
 
 Functions for loading DNA sequences in fasta format
 and for convert them to the required *one-hot* encoding.
+
+.. currentmodule:: crbm.sequences
 
 .. autosummary::
 
@@ -46,6 +51,8 @@ Utils
 Functions for investigating the results of the :class:`cRBM`,
 including for generating position frequency matrices, sequence logos
 and clustering plots.
+
+.. currentmodule:: crbm.utils
 
 .. autosummary::
 

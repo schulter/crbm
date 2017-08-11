@@ -10,14 +10,18 @@ Loading sample dataset
 
 Assuming you have successfully install the `crbm` package,
 you can load a sample dataset consisting of *Oct4* ChIP-seq peaks
-from embryonic stem cells (ESCs)::
+from embryonic stem cells (ESCs)
+
+.. code-block:: python
 
     import crbm
 
     # List of Biopython sequences
     seqs = crbm.load_sample()
 
-The original DNA sequences first need to be converted to *one-hot* encoding::
+The original DNA sequences first need to be converted to *one-hot* encoding
+
+.. code-block:: python
 
     # Convert to one-hot
     onehot = crbm.seqToOneHot(seqs)
@@ -26,7 +30,9 @@ Train cRBM
 ----------
 
 Next, we instantiate a cRBM to learn 10 motifs
-of length 15 bp and train it on the provided sequences::
+of length 15 bp and train it on the provided sequences
+
+.. code-block:: python
 
     # Obtain a cRBM object
     model = crbm.CRBM(num_motifs = 10, motif_length = 15)
@@ -53,7 +59,9 @@ Save and restore the parameters
 After having trained the model, 
 it is common to store the parameters
 reused them later for a subsequent analysis.
-To this end, the following methods can be invoked::
+To this end, the following methods can be invoked
+
+.. code-block:: python
 
     # Save parameters and hyper-parameters
     model.saveModel('oct4_model_params.pkl')
@@ -69,7 +77,9 @@ given by *position frequency matrices* (PFMs).
 The model parameters (e.g. the weight matrices) learned by the
 cRBM can be converted to such PFMs,
 which can then be used for further downstream analysis.
-For this purpose one can utilize::
+For this purpose one can utilize
+
+.. code-block:: python
 
     # Get a list of numpy matrices representing PFMs
     model.getPFMs()
@@ -79,7 +89,9 @@ For this purpose one can utilize::
     crbm.saveMotifs(model, path = './pfms/')
 
 PFMs are frequently visualized in terms of sequence logos
-which can be obtained by::
+which can be obtained by
+
+.. code-block:: python
 
     # Writes all logos in the logos/ directory
     crbm.utils.createSeqLogos(model, path = "./logos/")
@@ -97,7 +109,9 @@ Motif matches
 
 Next, we inspect at which positions in a set of DNA sequences
 motif matches are present.
-The per-position motif match probabilities can be obtained as follows::
+The per-position motif match probabilities can be obtained as follows
+
+.. code-block:: python
 
     # Per-position motif match probabilities
     # for the first 100 sequences
@@ -108,7 +122,10 @@ probabilities with dimensions
 `Nseqs x num_motifs x 1 x Seqlengths - motif_length + 1`.
 
 An average profile of match probabilities per-position
-can be illustrated using::
+can be illustrated using
+
+.. code-block:: python
+
     crbm.positionalDensityPlot(model, onehot[:100], \
         filename = './densityplot.png')
 
@@ -118,7 +135,9 @@ Clustering analysis
 
 Finally, we shall demonstrate how to perform a clustering analysis
 of the sequences under study based on the cRBM motifs.
-To that end, we first run TSNE clustering using::
+To that end, we first run TSNE clustering using
+
+.. code-block:: python
 
     # Run t-SNE clustering
     tsne = crbm.runTSNE(model, onehot)
@@ -141,7 +160,9 @@ is enriched or depleted in a certain dataset relative
 to the others a violin plot can be created.
 In the following example, we just artificially split
 the *Oct4* dataset into *set1* and *set2* to illustrate
-the function::
+the function
+
+.. code-block:: python
 
     # Assemble multiple datasets as follows
     data = {'set1': onehot[:1500], 'set2': onehot[1500:]}
@@ -154,7 +175,8 @@ the function::
 Summary of the full analysis
 ----------------------------
 
-Full analysis::
+Full analysis
+
 .. todo::
 
-    Add this
+    Add full example

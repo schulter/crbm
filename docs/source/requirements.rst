@@ -1,6 +1,6 @@
-============
-Requirements and installation
-============
+=============================
+System setup
+=============================
 
 Requirements
 ============
@@ -8,9 +8,17 @@ Requirements
 To run the ``crbm`` python package the following prerequisites
 are required on your system:
 
-1. Minimal requirements: ``theano``, ``numpy``, ``scipy``, ``joblib``, ``Biopython``
+* ``theano``
+* ``numpy``
+* ``scipy``
+* ``joblib``
+* ``Biopython``
+* ``matplotlib``
+* ``pandas``
+* ``weblogolib``
+* ``scikit-learn``
+* ``seaborn``
 
-2. Optional: ``matplotlib``, ``pandas``, ``weblogolib``, ``scikit-learn``, ``seaborn``
 
 The latter collection of packages are necessary to investigate the model
 results using our set of provided functions (e.g. :func:`crbm.utils.scatterTSNE`).
