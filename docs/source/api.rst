@@ -4,7 +4,6 @@ API
 
     
         
-    
 Convolutional restricted Boltzmann machine
 ==========================================
 
@@ -48,8 +47,9 @@ and for convert them to the required *one-hot* encoding.
 Utils
 =======
 
-Functions for investigating the results of the :class:`cRBM`,
-including for generating position frequency matrices, sequence logos
+This part presents functions contained in :mod:`crbm.utils` that
+support investigating the results of the :class:`cRBM`,
+including by generating position frequency matrices, sequence logos
 and clustering plots.
 
 .. currentmodule:: crbm.utils
@@ -67,6 +67,7 @@ and clustering plots.
 
 .. automodule:: crbm.utils
     :members: saveMotifs, positionalDensityPlot, runTSNE, tsneScatter,
+            createSeqLogos, createSeqLogo,
             tsneScatterWithPies, violinPlotMotifMatches
 
 Sample dataset
@@ -78,8 +79,6 @@ ENCODE [1]_.
 
 .. autofunction:: crbm.sequences.load_sample
 
-References
-===========
 
 .. [1] ENCODE Project Consortium and others. (2012).
         An integrated encyclopedia of DNA elements in the human genome. Nature.
