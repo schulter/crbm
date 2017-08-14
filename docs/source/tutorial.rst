@@ -126,6 +126,8 @@ can be illustrated using
 
 .. code-block:: python
 
+    # Plot positional enrichment for all motifs in the given
+    # test sequences
     crbm.positionalDensityPlot(model, onehot[:100], filename = './densityplot.png')
 
 
@@ -174,8 +176,5 @@ the function
 Summary of the full analysis
 ----------------------------
 
-Full analysis
-
-.. todo::
-
-    Add full example
+The full tutorial code can be found in
+`crbm/tutorial.py <https://github.molgen.mpg.de/wkopp/crbm/tutorial.py>`_
