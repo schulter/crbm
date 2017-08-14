@@ -8,7 +8,7 @@ the package on a small toy dataset.
 Loading sample dataset
 ----------------------
 
-Assuming you have successfully install the `crbm` package,
+Assuming you have successfully install the :mod:`crbm` package,
 you can load a sample dataset consisting of *Oct4* ChIP-seq peaks
 from embryonic stem cells (ESCs)
 
@@ -16,15 +16,22 @@ from embryonic stem cells (ESCs)
 
     import crbm
 
-    # List of Biopython sequences
-    seqs = crbm.load_sample()
+    # Obtain sample sequences in one-hot encoding
+    onhot = crbm.load_sample()
 
 The original DNA sequences first need to be converted to *one-hot* encoding
 
-.. code-block:: python
+.. note::
 
-    # Convert to one-hot
-    onehot = crbm.seqToOneHot(seqs)
+    The sample sequences are contained in the :mod:`crbm` package in
+    fasta format. Generally, fasta files can be loaded and converted 
+    to *one-hot* encoding according to
+
+    .. code-block:: python
+
+        # Convert to one-hot
+        seqs = crbm.readSeqsFromFasta("path/to/seq.fa")
+        onehot = crbm.seqToOneHot(seqs)
 
 Train cRBM
 ----------
@@ -115,7 +122,7 @@ The per-position motif match probabilities can be obtained as follows
 
     # Per-position motif match probabilities
     # for the first 100 sequences
-    matches = model.getHitProbs(onehot[:100])
+    matches = model.motifHitProbs(onehot[:100])
 
 Here, ``matches`` represents a 4D numpy array comprising the match
 probabilities with dimensions
@@ -144,7 +151,7 @@ To that end, we first run TSNE clustering using
     tsne = crbm.runTSNE(model, onehot)
 
     # Visualize the results in a scatter plot
-    crbm.scatterTSNE(model, onehot, filename = './tsnescatter.png')
+    crbm.tsneScatter({'Oct4': tsne}, filename = './tsnescatter.png')
 
     # Visualize the results in the scatter plot
     # by augmenting with the respective motif abundances
@@ -176,5 +183,5 @@ the function
 Summary of the full analysis
 ----------------------------
 
-The full tutorial code can be found in
-`crbm/tutorial.py <https://github.molgen.mpg.de/wkopp/crbm/tutorial.py>`_
+The full tutorial code can be found in the Github repository: 
+`crbmtutorial/tutorial.py <https://github.molgen.mpg.de/wkopp/crbmtutorial/tutorial.py>`_

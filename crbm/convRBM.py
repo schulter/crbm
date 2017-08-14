@@ -213,6 +213,8 @@ class CRBM:
         -----------
         filename : str
             Pickle file containing the model parameters.
+        returns : :class:`CRBM` object
+            An instance of CRBM with reloaded parameters.
         """
 
         numpyParams, hyperparams =joblib.load(filename)

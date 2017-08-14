@@ -20,7 +20,7 @@ config = {
     'version': version,
     'install_requires': ['numpy','Biopython','pandas', 'sklearn','Theano',
         'joblib','matplotlib', 'weblogo', 'seaborn'],
-    'packages': ['crbm'],
+    'packages': ['crbm', 'crbmtutorial'],
     'tests_require': ['pytest'],
     'setup_requires': ['pytest-runner'],
     'package_data': {'crbm':['data/oct4.fa']},

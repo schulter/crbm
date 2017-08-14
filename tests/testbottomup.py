@@ -6,7 +6,7 @@ from theano import tensor as T
 def sigmoid(act):
         return 1./(1.+np.exp(-act))
 
-def test_bottomup_activities():
+def tst_bottomup_activities():
     """Implement tests concerning bottomup activities."""
     # doublestranded = False
     data = load_sample()
@@ -35,20 +35,20 @@ def test_bottomup_activities():
     raise Exception("Not yet implemented")
 
 
-def test_bottomup_probabilities():
+def tst_bottomup_probabilities():
     """Tests concerning bottomup probs."""
     raise Exception("Not yet implemented")
 
-def test_topdown_activities():
+def tst_topdown_activities():
     """Tests concerning topdown activities."""
     raise Exception("Not yet implemented")
 
-def test_topdown_probabilities():
+def tst_topdown_probabilities():
     """Tests concerning topdown activities."""
     raise Exception("Not yet implemented")
 
 
-def test_motifhitprobs():
+def tst_motifhitprobs():
     """Prob dimension."""
     nmotifs = 1
     mlen = 1
