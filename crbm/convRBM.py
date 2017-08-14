@@ -2,6 +2,7 @@
 import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv2d as conv
+import warnings
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RS
 import scipy
@@ -70,6 +71,44 @@ class CRBM:
             momentum = 0.95, pooling = 1, cd_k = 5, 
             rho = 0.01, lambda_rate = 0.1):
      
+        # sanity checks:
+        if num_motifs <= 0:
+            raise Exception("Number of motifs must be positive.")
+
+        if motif_length <= 0:
+            raise Exception("Motif length must be positive.")
+
+        if epochs < 0:
+            raise Exception("Epochs must be non-negative.")
+
+        if input_dims <= 0:
+            raise Exception("input_dims must be positive.")
+        elif input_dims != 4:
+            warnings.warn("input_dims != 4 was not comprehensively \
+                tested yet. Be careful when interpreting the results.",
+                UserWarning)
+        
+        if batchsize <= 0:
+            raise Exception("batchsize must be positive.")
+        
+        if learning_rate <= 0.0:
+            raise Exception("learning_rate must be positive.")
+
+        if not (momentum >= 0.0 and momentum < 1.):
+            raise Exception("momentum must be between zero and one.")
+
+        if pooling <= 0:
+            raise Exception("pooling must be positive.")
+
+        if cd_k <= 0:
+            raise Exception("cd_k must be positive.")
+
+        if not (rho >= 0.0 and rho < 1.):
+            raise Exception("rho must be between zero and one.")
+
+        if lambda_rate < 0.:
+            raise Exception("lambda_rate must be non-negative.")
+
         # parameters for the motifs
         self.num_motifs = num_motifs
         self.motif_length = motif_length
@@ -229,9 +268,9 @@ class CRBM:
     def _computeHgivenV(self, data, flip_motif=False):
         """Theano function for complete bottom up pass."""
 
-        activity=self.bottomUpActivity(data,flip_motif)
-        probability=self.bottomUpProbability(activity)
-        sample=self.bottomUpSample(probability)
+        activity=self._bottomUpActivity(data,flip_motif)
+        probability=self._bottomUpProbability(activity)
+        sample=self._bottomUpSample(probability)
         return [probability, sample]
 
 
@@ -252,7 +291,7 @@ class CRBM:
         c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
         out = out + c_bc
         if softmaxdown:
-          prob_of_V = self.softmax(out)
+          prob_of_V = self._softmax(out)
           # now, we still need the sample of V. Compute it here
           pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape( \
              (prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
@@ -417,7 +456,7 @@ class CRBM:
         print "Start compiling Theano training function..."
         D = T.tensor4('data')
         updates = self._updateWeightsOnMinibatch(D, self.cd_k)
-        self.theano_trainingFun = theano.function(
+        self.theano_trainingFct = theano.function(
               [D],
               None,
               updates=updates,
@@ -567,7 +606,7 @@ class CRBM:
             self.motif_length -1
         training_data=training_data[:,:,:,:nseq]
 
-        if test_data:
+        if type(test_data) != type(None):
             nseq=int((test_data.shape[3]-\
                 self.motif_length + 1)/\
                 self.pooling)*\
@@ -593,7 +632,7 @@ class CRBM:
         for epoch in range(self.epochs):
             for [start,end] in self._iterateBatchIndices(\
                             training_data.shape[0],self.batchsize):
-                self._trainingFun(training_data[start:end,:,:,:])
+                self._trainingFct(training_data[start:end,:,:,:])
             meanfe=0.0
             meannmh=0.0
             nb=0

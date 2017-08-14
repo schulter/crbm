@@ -17,7 +17,7 @@ L = {'A': 0,
      }
 
 
-def getOneHotSeq(seq):
+def _getOneHotSeq(seq):
     """Convert Biopython Seq to one-hot encoding.
 
     .. note:: Only internally used.
@@ -30,7 +30,7 @@ def getOneHotSeq(seq):
         result[0, 0, L[seq[i]], i] = 1
     return result
 
-def computeKmerCounts(data, k):
+def _computeKmerCounts(data, k):
     """Count k-mers in one-hot encoded sequence.
     .. todo:: unused.
     """
@@ -131,7 +131,7 @@ def seqToOneHot(seqs):
 
     onehots = []
     for seq in seqs:
-        onehots.append(getOneHotSeq(seq.seq))
+        onehots.append(_getOneHotSeq(seq.seq))
     return np.concatenate(onehots, axis=0)
 
 
@@ -147,6 +147,9 @@ def load_sample():
         Sample DNA sequences in *one-hot* encoding.
     """
     
-    fafile = os.path.join(crbm.__path__[0], '..','seq', 'oct4.fa')
-    seqs = crbm.readSeqsFromFasta(fafile)
-    onehot = crbm.seqToOneHot(seqs)
+    
+    fafile = os.path.join(os.path.dirname(__file__), 'data', 'oct4.fa')
+    seqs = readSeqsFromFasta(fafile)
+    onehot = seqToOneHot(seqs)
+
+    return onehot
