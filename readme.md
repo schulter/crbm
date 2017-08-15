@@ -1,6 +1,7 @@
 # Convolutional restricted Boltzmann machine for learning DNA sequence features
 
 [![Build Status](https://travis-ci.org/wkopp/crbm.svg?branch=master)](https://travis-ci.org/wkopp/crbm)
+[![codecov](https://codecov.io/gh/wkopp/crbm/branch/master/graph/badge.svg)](https://codecov.io/gh/wkopp/crbm)
 [![Documentation Status](https://readthedocs.org/projects/crbm/badge/?version=latest)](http://crbm.readthedocs.io/en/latest/?badge=latest)
 
 This package contains functionality to extract redundant
