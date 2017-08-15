@@ -12,3 +12,7 @@
 
 # ipython specific files
 .ipynb_checkpoints/
+
+build/
+_static/
+_templates/

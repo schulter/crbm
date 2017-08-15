@@ -11,7 +11,26 @@ from Bio.motifs.jaspar import write as write_motif
 from Bio.motifs.jaspar import Motif
 import os
 
-def saveMotifs(model, path, name="mot", fformat = 'jaspar'):
+def saveMotifs(model, path, name = "mot", fformat = 'jaspar'):
+    """Save weight-matrices as PFMs.
+
+    This method converts the cRBM weight-matrices to position frequency matrices
+    and stores each matrix in a single file with ending .pfm.
+
+    Parameters
+    -----------
+    model : :class:`CRBM` object
+        A cRBM object.
+
+    path : str
+        Directory in which the PFMs should be stored.
+
+    name : str
+        File prefix for the motif files. Default: 'mot'.
+    fformat : str
+        File format of the motifs. Either 'jaspar' or 'tab'. Default: 'jaspar'.
+    """
+    
     pfms = model.getPFMs()
     alphabet = ['A','C','G','T']
     for i in range(len(pfms)):
@@ -25,15 +44,39 @@ def saveMotifs(model, path, name="mot", fformat = 'jaspar'):
             f.write(write_motif([mot], fformat))
         f.close()
 
-def createSeqLogos(crbm, path, fformat = 'eps'):
-    pfms = crbm.getPFMs()
+def createSeqLogos(model, path, fformat = 'eps'):
+    """Create sequence logos for all cRBM motifs
 
-    for idx in range(len(crbm.getPFMs())):
-        pfm = pfms[i]
+    Parameters
+    -----------
+    model : :class:`CRBM` object
+        A cRBM object.
+    path : str
+        Output folder.
+    fformat : str
+        File format for storing the sequence logos. Default: 'eps'.
+    """
+    pfms = model.getPFMs()
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    for idx in range(len(model.getPFMs())):
+        pfm = pfms[idx]
         createSeqLogo(pfm, path + "/logo{:d}.{}".format(idx+1, fformat),
                 fformat)
 
 def createSeqLogo(pfm, filename, fformat = 'eps'):
+    """Create sequence logo for an individual cRBM motif.
+
+    Parameters
+    -----------
+    pfm : numpy-array
+        2D numpy array representing a PFM. See :meth:`CRBM.getPFMs`
+    path : str
+        Output folder.
+    fformat : str
+        File format for storing the sequence logos. Default: 'eps'.
+    """
     alph = Alphabet('ACGT')
     weblogoData = LogoData.from_counts(alph, pfm.T)#, c)#, learner.c.get_value().reshape(-1))
     weblogoOptions = LogoOptions(color_scheme=classic)
@@ -43,12 +86,29 @@ def createSeqLogo(pfm, filename, fformat = 'eps'):
     f.write(content)
     f.close()
 
-def positionalDensityPlot(crbm, seqs, filename = None):
+def positionalDensityPlot(model, seqs, filename = None):
+    """Positional enrichment of the motifs.
+
+    This function creates a figure that illustrates a positional
+    enrichment of all cRBM motifs in the given set of sequences.
+
+    Parameters
+    -----------
+    model : :class:`CRBM` object
+        A cRBM object
+    seqs : numpy-array
+        A set of DNA sequences in *one-hot* encoding.
+        See :func:`crbm.sequences.seqToOneHot`
+    filename : str
+        Filename for storing the figure. If ``filename = None``,
+        no figure will be stored.
+    """
+
     # get motifs and hit observer
 
-    pfms = crbm.getPFMs()
+    pfms = model.getPFMs()
 
-    h = crbm.getHitProbs(seqs)
+    h = model.motifHitProbs(seqs)
 
     #mean over sequences
     mh=h.mean(axis=(0,2))
@@ -64,7 +124,6 @@ def positionalDensityPlot(crbm, seqs, filename = None):
                 label='Motif {:d}'.format(m_idx +1))
     plt.xlabel("Position")
     plt.ylabel("Average motif match probability")
-   # plt.xticks(np.arange(min(x), max(x)+1, 1.0))
     plt.legend(bbox_to_anchor=(1.05,1), loc=2, borderaxespad=0.)
 
     if filename:
@@ -73,9 +132,24 @@ def positionalDensityPlot(crbm, seqs, filename = None):
         plt.show()
 
 def runTSNE(model, seqs):
+    """Run t-SNE on the motif abundances.
+
+    This function produces a clustering of the sequences
+    using t-SNE based on the motif matches in the sequences.
+    Accordingly, the sequences are projected onto a 2D hyper-plane
+    in which similar sequences are located in close proximity.
+
+    Parameters
+    -----------
+    model : :class:`CRBM` object
+        A cRBM object
+    seqs : numpy-array
+        A set of DNA sequences in *one-hot* encoding.
+        See :func:`crbm.sequences.seqToOneHot`
+    """
 
     #hiddenprobs = model.fePerMotif(seqs)
-    hiddenprobs = model.getHitProbs(seqs)
+    hiddenprobs = model.motifHitProbs(seqs)
     hiddenprobs = hiddenprobs.max(axis=(2,3))
 
     hreshaped = hiddenprobs.reshape((hiddenprobs.shape[0], 
@@ -83,26 +157,87 @@ def runTSNE(model, seqs):
     model = TSNE()
     return model.fit_transform(hreshaped)
 
-def tsneScatter(data, lims, colors, filename = None, legend = True):
+def tsneScatter(data, lims = None, colors = None, filename = None, legend = True):
+    """Scatter plot of t-SNE clustering.
+
+    Parameters
+    -----------
+    data : dict
+        Dictionary containing the dataset name (keys) and data itself (values).
+        The data is assumed to have been generated using :func:`runTSNE`.
+
+    lims : tuple
+        Optional parameter containing the x- and y-limits for the figure.
+        If None, the limits are automatically determined.
+        For example: ``lims = ([xmin, ymin], [xmax, ymax])``
+
+    colors : matplotlib.cm
+        Optional colormap to illustrate the datapoints.
+        If None, a default colormap will be used.
+
+    filename : str
+        Filename for storing the figure. Default: None, means 
+        the figure stored but directly displayed.
+
+    legend : bool
+        Include the legend into the figure. Default: True
+    """
+        
+
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_axes([.1,.1, .6,.75])
+
+    if not colors:
+        colors = cm.brg(np.linspace(0,1,len(data)))
+
     for name, color  in zip(data, colors):
         plt.scatter(x=data[name][:,0], y=data[name][:,1], 
                 c=color, label = name, alpha=.3)
-    plt.xlim(lims[0][0], lims[1][0])
-    plt.ylim(lims[0][1], lims[1][1])
+    if lims:
+        plt.xlim(lims[0][0], lims[1][0])
+        plt.ylim(lims[0][1], lims[1][1])
+
     if legend:
         plt.legend(bbox_to_anchor=(1.05,1), loc=2, borderaxespad=0.)
     plt.axis('off')
+
     if filename:
-        print(filename)
         fig.savefig(filename, dpi = 700)
     else:
         plt.show()
 
 def tsneScatterWithPies(model, seqs, tsne, lims = None, filename= None):
+    """Scatter plot of t-SNE clustering.
 
-    hiddenprobs = model.getHitProbs(seqs)
+    This function produces a figure in which sequences are represented
+    as pie chart in a 2D t-SNE hyper-plane obtained with :func:`runTSNE`.
+    Moreover, the pie pieces correspond to the individual :class:`CRBM`
+    motifs and the sizes represent the enrichment/abundance of the
+    motifs in the respective sequences.
+
+    Parameters
+    -----------
+    model : :class:`CRBM` object
+        A cRBM object
+
+    seqs : numpy-array
+        DNA sequences represented in *one-hot* encoding.
+        See :func:`crbm.sequences.seqToOneHot`.
+    tsne : numpy-array
+        2D numpy array representing the sequences projected onto
+        the t-SNE hyper-plane that was obtained with :func:`runTSNE`.
+
+    lims : tuple
+        Optional parameter containing the x- and y-limits for the figure.
+        For example:
+
+        ([xmin, ymin], [xmax, ymax])
+
+    filename : str
+        Filename for storing the figure.
+    """
+
+    hiddenprobs = model.motifHitProbs(seqs)
     probs = hiddenprobs
 
     pmax=probs.max(axis=(0,2,3))
@@ -138,8 +273,32 @@ def tsneScatterWithPies(model, seqs, tsne, lims = None, filename= None):
     else:
         plt.show()
 
-def violinPlotMotifMatches(model, seqs, labels, filename = None):
-    hiddenprobs = model.getHitProbs(seqs)
+def violinPlotMotifMatches(model, data, filename = None):
+    """Violin plot of motif abundances.
+
+    This function summarized the relative motif abundances of
+    the :class:`CRBM` motifs
+    in a given set of sequences (e.g. sequences with different functions).
+
+    Parameters
+    -----------
+    model : :class:`CRBM` object
+        A cRBM object
+    data : dict
+        Dictionary with keys representing dataset-names
+        and values a set of DNA sequences in *one-hot* encoding.
+        See :func:`crbm.sequences.seqToOneHot`.
+    filename : str
+        Filename to store the figure. Default: None,
+        the figure will be dirctly disployed.
+    """
+
+    seqs = np.concatenate(data.values(), axis=0)
+    labels = []
+    for k in data:
+        labels += [k] * data[k].shape[0]
+
+    hiddenprobs = model.motifHitProbs(seqs)
     probs = hiddenprobs.mean(axis=(2,3))
 
     probs = probs / np.amax(probs,axis=0, keepdims=True)
