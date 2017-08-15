@@ -183,4 +183,4 @@ Summary of the full analysis
 ----------------------------
 
 The full tutorial code can be found in the Github repository: 
-`crbmtutorial/tutorial.py <https://github.com/wkopp/crbm/crbmtutorial/tutorial.py>`_
+`crbmtutorial/tutorial.py <https://github.com/wkopp/crbm/blob/master/crbmtutorial/tutorial.py>`_
