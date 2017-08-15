@@ -9,7 +9,9 @@ exclude_lines =
     raise NotImplementedError
     if __name__ == .__main__.:
 ignore_errors = True
-omit = tests/*
+omit = 
+    tests/*
+    setup.py
 
 [html]
 directory = coverage_html_report

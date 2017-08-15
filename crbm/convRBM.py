@@ -724,7 +724,7 @@ class CRBM:
 
         return T.exp(x) / T.exp(x).sum(axis=2, keepdims=True)
 
-    def __str__(self):
+    def __repr__(self):
         st = "Parameters:\n\n"
         st += "Number of motifs: {}\n".format(self.num_motifs)
         st += "Motif length: {}\n".format(self.motif_length)
