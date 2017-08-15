@@ -32,10 +32,10 @@ See `Theano <http://deeplearning.net/software/theano/>`_ documention for more in
 Installation
 ============
 
-The crbm package can be obtained from `GitHub <https://github.molgen.mpg.de/wkopp/crbm>`_
+The crbm package can be obtained from `GitHub <https://github.com/wkopp/crbm>`_
 
 At the moment you can install it according to::
 
-    git clone https://github.molgen.mpg.de/wkopp/crbm.git
+    git clone https://github.com/wkopp/crbm.git
     cd crbm/
     python setup.py install

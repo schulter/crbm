@@ -175,13 +175,12 @@ the function
     # Assemble multiple datasets as follows
     data = {'set1': onehot[:1500], 'set2': onehot[1500:]}
 
-.. todo::
-    
-    make this consistent with the other print method
+    crbm.violinPlotMotifMatches(model, data, 
+            filename = os.path.join(path, 'violinplot.png'))
 
     
 Summary of the full analysis
 ----------------------------
 
 The full tutorial code can be found in the Github repository: 
-`crbmtutorial/tutorial.py <https://github.molgen.mpg.de/wkopp/crbmtutorial/tutorial.py>`_
+`crbmtutorial/tutorial.py <https://github.com/wkopp/crbm/crbmtutorial/tutorial.py>`_
