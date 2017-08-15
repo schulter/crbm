@@ -15,13 +15,14 @@ before_install:
 # command to install dependencies
 install:
     - pip install codecov
+    - pip install pytest-cov
     - pip install sphinx
     - pip install .
     - python setup.py install
     #- pip install -r requirements.txt
 
 # command to run tests
-script: pytest
+script: pytest --cov=./
 
 after_success:
     - codecov
