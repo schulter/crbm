@@ -10,7 +10,7 @@ python:
     - "pypy3" # Pypy3 2.4.0
 # command to install dependencies
 install:
-    - pip install --user codecov
+    - pip install codecov
     - pip install .
     - python setup.py install
     #- pip install -r requirements.txt
