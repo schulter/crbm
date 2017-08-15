@@ -23,6 +23,16 @@ sys.path.insert(0, os.path.abspath('..'))
 #From: https://stackoverflow.com/questions/12206334/sphinx-autosummary-toctree-contains-reference-to-nonexisting-document-warnings
 numpydoc_show_class_members = False
 
+import sys
+try:
+    from unittest.mock import Mock
+except ImportError:
+    from mock import Mock
+
+
+MOCK_MODULES = ['numpydoc']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
 
 # -- General configuration ------------------------------------------------
 
