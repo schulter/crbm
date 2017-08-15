@@ -11,7 +11,7 @@ python:
 before_install:
     - sudo apt-get update
     - sudo apt-get -y --reinstall install ghostscript
-    - sudo apt-get -y --reinstall install gs-eps
+      #    - sudo apt-get -y --reinstall install gs-eps
 # command to install dependencies
 install:
     - pip install codecov
