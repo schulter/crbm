@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import theano
 from theano import tensor as T
+import os
 
 def sigmoid(act):
         return 1./(1.+np.exp(-act))
@@ -54,7 +55,7 @@ class TestCRBM(object):
         with pytest.raises(Exception):
             CRBM(num_motifs = 1, motif_length = 1, lambda_rate = -.1)
 
-    def test_crbm_creation(self):
+    def test_crbm_creation(self, tmpdir):
         """Test CRBM creation and reloading."""
 
         # cRBM
@@ -69,9 +70,9 @@ class TestCRBM(object):
         np.testing.assert_equal(c.shape, (1,4))
 
         # save model
-        model.saveModel("model.pkl")
+        model.saveModel(os.path.join(tmpdir.strpath, "model.pkl"))
 
-        model2 = CRBM.loadModel("model.pkl")
+        model2 = CRBM.loadModel(os.path.join(tmpdir.strpath,"model.pkl"))
 
         # check hyper-parameters
 
