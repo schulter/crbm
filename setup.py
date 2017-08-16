@@ -9,7 +9,7 @@ cmdclass = {'build_sphinx': BuildDoc}
 
 name = "cRBM"
 version = "1.0"
-release = "1.0.0"
+release = "1.0.dev1"
 
 config = {
     'description': 'Convolutional restricted Boltzmann machine for learning DNA sequence features',

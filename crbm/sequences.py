@@ -30,22 +30,6 @@ def _getOneHotSeq(seq):
         result[0, 0, L[seq[i]], i] = 1
     return result
 
-def _computeKmerCounts(data, k):
-    """Count k-mers in one-hot encoded sequence.
-    .. todo:: unused.
-    """
-    nseq = data.shape[0]
-    seqlen = data.shape[3]
-    countmatrix = np.zeros((nseq, np.power(4,k))).astype('int')
-    x = np.power(4, range(k))
-    a = range(4)
-    for i in range(nseq):
-        for j in range(seqlen-k+1):
-            position = np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int')
-            countmatrix[i, position] = countmatrix[i, position] + 1
-    return countmatrix
-
-
 def readSeqsFromFasta(filename):
     """Read sequences from multi-fasta file.
 

@@ -18,7 +18,7 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../..'))
 
 #From: https://stackoverflow.com/questions/12206334/sphinx-autosummary-toctree-contains-reference-to-nonexisting-document-warnings
 numpydoc_show_class_members = False
@@ -35,7 +35,7 @@ numpydoc_show_class_members = False
 # ones.
 extensions = ['sphinx.ext.autodoc',
     #'sphinx.ext.doctest',
-    #'sphinx.ext.todo',
+    'sphinx.ext.todo',
     #'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
@@ -173,6 +173,7 @@ except ImportError:
 
 
 MOCK_MODULES = ['numpydoc']
+MOCK_MODULES = []
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 

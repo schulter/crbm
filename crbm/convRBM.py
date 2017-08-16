@@ -422,23 +422,6 @@ class CRBM:
 
         return updates
 
-    def _gradientSparsityConstraintReLU(self, data):
-        """Theano function that defines the relu-based sparsity constraint.
-
-        .. warning::
-            This method is deprecated.
-        """
-
-        # get expected[H|V]
-        [prob_of_H, _] = self._computeHgivenV(data)
-        gradKernels = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-                                                    self.rho)),
-                             self.motifs)
-        gradBias = T.grad(T.mean(T.nnet.relu(T.mean(prob_of_H, axis=(0, 2, 3)) -
-                                                 self.rho)),
-                          self.bias)
-        return gradKernels, gradBias
-
     def _gradientSparsityConstraintEntropy(self, data):
         """Theano function that defines the entropy-based sparsity constraint."""
         # get expected[H|V]
@@ -506,12 +489,6 @@ class CRBM:
 
         
         if self.doublestranded:
-            Tfeat=T.mean(self._bottomUpActivity(D)+self._bottomUpActivity(D,True),axis=(2,3))
-        else:
-            Tfeat=T.mean(self._bottomUpActivity(D),axis=(2,3))
-        self.theano_featurize=theano.function([D],Tfeat)
-
-        if self.doublestranded:
             self.theano_getHitProbs = theano.function([D], \
                 self._bottomUpProbability(self._bottomUpActivity(D)))
         else:
@@ -566,24 +543,6 @@ class CRBM:
             Free energy per sequence.
         """
         return self.theano_freeEnergy(data)
-
-    def featurize(self, data):
-        """Determines the bottom up activities summed across the sequence length.
-
-        .. warning::
-
-            Deprecated. Avoid using this method.
-
-        Parameters
-        -----------
-        data : numpy-array
-            4D numpy array representing a DNA sequence in one-hot encoding.
-            See :meth:`crbm.sequences.seqToOneHot`.
-
-        returns : numpy-array
-            2D Numpy array containing features.
-        """
-        return self.theano_featurize(data)
 
     def fit(self, training_data, test_data = None):
         """Fits the cRBM to the provided training sequences.
