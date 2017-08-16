@@ -18,20 +18,10 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../..'))
 
 #From: https://stackoverflow.com/questions/12206334/sphinx-autosummary-toctree-contains-reference-to-nonexisting-document-warnings
 numpydoc_show_class_members = False
-
-import sys
-try:
-    from unittest.mock import Mock
-except ImportError:
-    from mock import Mock
-
-
-MOCK_MODULES = ['numpydoc']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
 # -- General configuration ------------------------------------------------
@@ -44,13 +34,15 @@ sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
-    'sphinx.ext.doctest',
+    #'sphinx.ext.doctest',
     'sphinx.ext.todo',
-    'sphinx.ext.coverage',
+    #'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
+#    'sphinx.ext.linkcode',
     'numpydoc',
-    'sphinx.ext.githubpages']
+    #'sphinx.ext.githubpages'
+    ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -172,5 +164,16 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
+
+import sys
+try:
+    from unittest.mock import Mock
+except ImportError:
+    from mock import Mock
+
+
+MOCK_MODULES = ['numpydoc']
+MOCK_MODULES = []
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
