@@ -199,7 +199,63 @@ class TestCRBM(object):
         np.testing.assert_equal(output.shape, (data.shape[0], nmot, 
             1, data.shape[3] - mlen +1)) 
 
+    def controlTopDownActivity(self, w, c, data, datap = None):
+        """Top down activity control implementation."""
+
+        seqlen = data.shape[3]+w.shape[3]-1
+        nseq = data.shape[0]
+        nmot = w.shape[0]
+        mlen = w.shape[3]
+
+        output_control = np.zeros((nseq, 1, 4, seqlen))
+        output_control += c[np.newaxis, 0,:, np.newaxis]
+        for seq in range(nseq):
+            for pos in range(seqlen-mlen, -1, -1):
+                for m in range(nmot):
+                    output_control[seq,0,:,pos:(pos+mlen)] += \
+                            w[m,0,:,:]*data[seq, m, 0, pos] + \
+                            w[m,0,::-1,::-1]*( \
+                                0.0 if type(datap)==type(None) \
+                                        else datap[seq, m, 0, pos])
+        return output_control
+
+    def topdownActivitySS(self, model, data):
+
+        input = T.tensor4()
+
+        vact = theano.function([input], model._topDownActivity(input, None))
+        vprob = theano.function([input], model._topDownProbability(
+            model._topDownActivity(input, None)))
+        vgivenh = theano.function([input], model._computeVgivenH(input, None))
+
+        out_act = vact(data)
+
+        out_prob = vprob(data)
+
+        out_prob2, _ = vgivenh(data)
+
+        return out_act, out_prob, out_prob2
+
+    def topdownActivityDS(self, model, data, datap):
+
+        i1 = T.tensor4()
+        i2 = T.tensor4()
+
+        vact = theano.function([i1, i2], model._topDownActivity(i1, i2))
+        vprob = theano.function([i1, i2], model._topDownProbability(
+            model._topDownActivity(i1, i2)))
+        vgivenh = theano.function([i1, i2], model._computeVgivenH(i1, i2))
+
+        out_act = vact(data, datap)
+
+        out_prob = vprob(data, datap)
+
+        out_prob2, _ = vgivenh(data, datap)
+
+        return out_act, out_prob, out_prob2
+
     def test_topdown_singlestranded_full(self):
+        """Test computeVgivenH with DNA as input."""
 
         data = self.data[:11]
         nmot = 10
@@ -210,7 +266,6 @@ class TestCRBM(object):
         input = T.tensor4()
 
         _, h1 = model._computeHgivenV(input, False)
-        #_, h2 = model._computeHgivenV(input, False)
 
         vgivenh = theano.function([input], model._computeVgivenH(h1, None))
 
@@ -220,14 +275,19 @@ class TestCRBM(object):
 
         poutput, soutput = vgivenh(data)
 
+        # test correct shape
         np.testing.assert_equal(poutput.shape, data.shape)
 
+        # test correct normalization
+        # each position sums to one
         np.testing.assert_allclose(poutput.sum(), data.shape[0]*data.shape[3], 
                 rtol=1e-4, atol=1e-4)
+        # test correct sampling: one 1 per position
         np.testing.assert_allclose(soutput.sum(), data.shape[0]*data.shape[3],
                 rtol=1e-4, atol=1e-4)
 
     def test_topdown_doublestranded_full(self):
+        """Test computeVgivenH with DNA as input."""
 
         data = self.data[:11]
         nmot = 10
@@ -256,8 +316,124 @@ class TestCRBM(object):
                 rtol=1e-4, atol=1e-4)
 
 
-    def test_topdown_singlestranded(self):
-        return
+    def test_topdown_singlestranded_onlyzeros(self):
+        """ Test VgivenH with only zero hiddens."""
+
+        nseq = 11
+        seqlen = 200
+        nmot = 10
+        mlen = 5
+
+        data = np.zeros((nseq, nmot, 1, seqlen-mlen+1), dtype="float32")
+
+        # make theano function
+        model = CRBM(num_motifs = nmot, motif_length = mlen)
+
+        oa, op, op2 = self.topdownActivitySS(model, data)
+
+        # test correct shape
+        np.testing.assert_equal(op.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op.shape, op2.shape)
+        np.testing.assert_equal(op, op2)
+
+        # all must be 0.25
+        np.testing.assert_allclose(0.25, op, rtol=1e-5, atol=1e-5)
+
+    def test_topdown_doublestranded_onlyzeros(self):
+        """ Test VgivenH with only zero hiddens."""
+
+        nseq = 11
+        seqlen = 200
+        nmot = 10
+        mlen = 5
+
+        data = np.zeros((nseq, nmot, 1, seqlen-mlen+1), dtype="float32")
+
+        # make theano function
+        model = CRBM(num_motifs = nmot, motif_length = mlen)
+
+        oa, op, op2 = self.topdownActivityDS(model, data, data)
+
+        # test correct shape
+        np.testing.assert_equal(op.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op.shape, op2.shape)
+        np.testing.assert_equal(op, op2)
+
+        # all must be 0.25
+        np.testing.assert_allclose(0.25, op, rtol=1e-5, atol=1e-5)
+
+    def test_topdown_singlestranded_onlyones(self):
+        """ Test VgivenH with only ones hiddens."""
+
+        nseq = 11
+        seqlen = 200
+        nmot = 10
+        mlen = 5
+
+        data = np.ones((nseq, nmot, 1, seqlen-mlen+1), dtype="float32")
+
+        # make theano function
+        model = CRBM(num_motifs = nmot, motif_length = mlen)
+
+        oa, op, op2 = self.topdownActivitySS(model, data)
+
+        w = model.motifs.get_value()
+        c = model.c.get_value()
+        output_control = self.controlTopDownActivity(w, c, data)
+
+        np.testing.assert_equal(oa.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op2.shape, (nseq, 1, 4, seqlen))
+
+        # check if all activities are similar
+        np.testing.assert_allclose(oa, output_control, 
+                rtol=1e-5, atol=1e-5)
+
+
+        output_control = np.exp(output_control) / np.exp( \
+                output_control).sum(axis=2, keepdims=True)
+
+        # check if all probabilities are similar
+        np.testing.assert_allclose(output_control, op, rtol=1e-5, atol=1e-5)
+
+        # check correctness of _computeVgivenH
+        np.testing.assert_allclose(op, op2, rtol=1e-5, atol=1e-5)
+
+    def test_topdown_doublestranded_onlyones(self):
+        """ Test VgivenH with only ones hiddens."""
+
+        nseq = 11
+        seqlen = 200
+        nmot = 10
+        mlen = 5
+
+        data = np.ones((nseq, nmot, 1, seqlen-mlen+1), dtype="float32")
+
+        # make theano function
+        model = CRBM(num_motifs = nmot, motif_length = mlen)
+
+        oa, op, op2 = self.topdownActivityDS(model, data, data)
+
+        w = model.motifs.get_value()
+        c = model.c.get_value()
+
+        output_control = self.controlTopDownActivity(w, c, data, data)
+
+        np.testing.assert_equal(oa.shape, (nseq, 1, 4, seqlen))
+
+        # check if all activities are similar
+        np.testing.assert_allclose(oa, output_control, rtol=1e-5, atol=1e-5)
+
+        output_control = np.exp(output_control) / np.exp( \
+                output_control).sum(axis=2, keepdims=True)
+
+        # check if all probabilities are similar
+        np.testing.assert_allclose(output_control, op, rtol=1e-5, atol=1e-5)
+
+        np.testing.assert_allclose(op, op2, rtol=1e-5, atol=1e-5)
+
+    def test_topdown_singlestranded_randomhidden(self):
+        """Test topdown with random hidden states."""
 
         nseq = 11
         seqlen = 200
@@ -265,88 +441,68 @@ class TestCRBM(object):
         mlen = 5
 
         data = np.random.binomial(1, p = \
-                [[[[0.1]*(seqlen-nmot+1)]*1]*nmot]*nseq).astype("float32")
+                [[[[0.1]*(seqlen-mlen+1)]*1]*nmot]*nseq).astype("float32")
 
         # make theano function
         model = CRBM(num_motifs = nmot, motif_length = mlen)
-        input = T.tensor4()
 
-        vgivenh = theano.function([input], model._computeVgivenH(input, None))
+        oa, op, op2 = self.topdownActivitySS(model, data)
 
         w = model.motifs.get_value()
-
         c = model.c.get_value()
 
-        poutput, soutput = vgivenh(data)
+        output_control = self.controlTopDownActivity(w, c, data)
 
-        np.testing.assert_equal(poutput.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(oa.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op.shape, (nseq, 1, 4, seqlen))
 
-        output_control = np.zeros(poutput.shape)
-        for seq in range(data.shape[0]):
-            for s in range(data.shape[3]-w.shape[3]+1):
-                for m in range(w.shape[0]):
-                    output_control[seq,m,0,s] += \
-                            np.multiply(w[m,0,:,::-1], \
-                            data[seq, m, 1, s:(s+w.shape[3])]).sum(axis=1) \
-                            + c[0,:]
-
-        np.testing.assert_allclose(poutput, output_control, 
-                rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(oa, output_control, rtol=1e-5, atol=1e-5)
 
         output_control = np.exp(output_control) / np.exp( \
-                output_control).sum(axis=2)
-        np.testing.assert_allclose(output_control, poutput, 
-                rtol=1e-5, atol=1e-5)
+                output_control).sum(axis=2, keepdims=True)
+        np.testing.assert_allclose(output_control, op, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(output_control, op2, rtol=1e-5, atol=1e-5)
 
 
-    def test_topdown_doublestranded(self):
-        return
+    def test_topdown_doublestranded_randomhidden(self):
+        """Test topdown with random hidden states."""
 
         nseq = 11
         seqlen = 200
         nmot = 10
         mlen = 5
 
-        hidden = np.random.binomial(1, p = \
-                [[[[0.1]*(seqlen-nmot+1)]*1]*nmot]*nseq).astype("float32")
-        hidden_p = np.random.binomial(1, p = \
-                [[[[0.1]*(seqlen-nmot+1)]*1]*nmot]*nseq).astype("float32")
+        data = np.random.binomial(1, p = \
+                [[[[0.1]*(seqlen-mlen+1)]*1]*nmot]*nseq).astype("float32")
+        datap = np.random.binomial(1, p = \
+                [[[[0.1]*(seqlen-mlen+1)]*1]*nmot]*nseq).astype("float32")
 
         # make theano function
         model = CRBM(num_motifs = nmot, motif_length = mlen)
-        input1 = T.tensor4()
-        input2 = T.tensor4()
 
-        vgivenh = theano.function([input1, input2], 
-                model._computeVgivenH(input1, input2))
+        oa, op, op2 = self.topdownActivityDS(model, data, datap)
 
         w = model.motifs.get_value()
-        wp = w[:,:,::-1, ::-1]
-
         c = model.c.get_value()
 
-        poutput, soutput = vgivenh(hidden, hidden_p)
+        output_control = self.controlTopDownActivity(w, c, data, datap)
 
-        np.testing.assert_equal(poutput.shape, (nseq, 1, 4, seqlen))
 
-        output_control = np.zeros(poutput.shape)
-        for seq in range(hidden.shape[0]):
-            for s in range(hidden.shape[3]-w.shape[3]+1):
-                for m in range(w.shape[0]):
-                    output_control[seq,m,0,s] += \
-                            np.multiply(w[m,0,:,::-1], \
-                            hidden[seq, 0, :, s:(s+w.shape[3])]).sum(axis=1) + \
-                            np.multiply(wp[m,0,:,::-1], \
-                            hidden_p[seq, 0, :, s:(s+w.shape[3])]).sum(axis=1) \
-                            + c[0,:]
+        np.testing.assert_equal(oa.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op.shape, (nseq, 1, 4, seqlen))
+        np.testing.assert_equal(op2.shape, (nseq, 1, 4, seqlen))
 
-        np.testing.assert_allclose(poutput, output_control, 
-                rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(oa, output_control, rtol=1e-5, atol=1e-5)
+
+        print(oa.shape)
+        print(output_control.shape)
 
         output_control = np.exp(output_control) / np.exp( \
-                output_control).sum(axis=2)
-        np.testing.assert_allclose(output_control, poutput, 
-                rtol=1e-5, atol=1e-5)
+                output_control).sum(axis=2, keepdims = True)
+        print(output_control.shape)
+        np.testing.assert_allclose(output_control, op, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(op, op2, rtol=1e-5, atol=1e-5)
+
 
     def test_freeEnergy_dims(self):
 
@@ -361,3 +517,4 @@ class TestCRBM(object):
 
         print(fe.shape)
         np.testing.assert_equal(fe.shape, (data.shape[0],))
+

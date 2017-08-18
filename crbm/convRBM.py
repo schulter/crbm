@@ -275,39 +275,55 @@ class CRBM:
         sample=self._bottomUpSample(probability)
         return [probability, sample]
 
-
-    def _computeVgivenH(self, H_sample, H_sample_prime, softmaxdown=True):
-        """Theano function for complete top down pass."""
-
+    def _topDownActivity(self, h, hprime):
+        """Theano function for top down activity."""
         W = self.motifs.dimshuffle(1, 0, 2, 3)
-        C = conv(H_sample, W, border_mode='full', filter_flip=True)
+        C = conv(h, W, border_mode='full', filter_flip=True)
         
         out = T.sum(C, axis=1, keepdims=True)  # sum over all K
 
-        if H_sample_prime:
-            C = conv(H_sample_prime, W[:,:,::-1,::-1], \
+        if hprime:
+            C = conv(hprime, W[:,:,::-1,::-1], \
                     border_mode='full', filter_flip=True)
             out = out+ T.sum(C, axis=1, keepdims=True)  # sum over all K
 
         c_bc = self.c
         c_bc = c_bc.dimshuffle('x', 0, 1, 'x')
-        out = out + c_bc
-        if softmaxdown:
-          prob_of_V = self._softmax(out)
-          # now, we still need the sample of V. Compute it here
-          pV_ = prob_of_V.dimshuffle(0, 1, 3, 2).reshape( \
-             (prob_of_V.shape[0]*prob_of_V.shape[3], prob_of_V.shape[2]))
-          V_ = self.theano_rng.multinomial(n=1, 
-               pvals=pV_).astype(theano.config.floatX)
-          V = V_.reshape((prob_of_V.shape[0], 
-              1, prob_of_V.shape[3], 
-              prob_of_V.shape[2])).dimshuffle(0, 1, 3, 2)
-        else:
-          prob_of_V = self.sigmoid(out)
-          V=self.theano_rng.multinomial(n=1,\
-             pvals=prob_of_V).astype(theano.config.floatX)
+        activity = out + c_bc
+        return activity
 
-        return [prob_of_V, V]
+    def _topDownProbability(self, activity, softmaxdown = True):
+        """Theano function for top down probability."""
+        if softmaxdown:
+            return self._softmax(activity)
+        else:
+            return 1./(1.-T.exp(-activity))
+
+    def _topDownSample(self, probability, softmaxdown = True):
+        """Theano function for top down sample."""
+        if softmaxdown:
+            pV_ = probability.dimshuffle(0, 1, 3, 2).reshape( \
+                (probability.shape[0]*probability.shape[3], 
+                    probability.shape[2]))
+            V_ = self.theano_rng.multinomial(n=1, pvals=pV_).astype(
+                    theano.config.floatX)
+            V = V_.reshape((probability.shape[0], 1, probability.shape[3], 
+                probability.shape[2])).dimshuffle(0, 1, 3, 2)
+
+        else:
+            V=self.theano_rng.multinomial(n=1,\
+                pvals=probability).astype(theano.config.floatX)
+        return V
+
+    def _computeVgivenH(self, H_sample, H_sample_prime, softmaxdown=True):
+        """Theano function for complete top down pass."""
+
+        activity = self._topDownActivity(H_sample, H_sample_prime)
+
+        prob = self._topDownProbability(activity, softmaxdown)
+        sample = self._topDownSample(prob, softmaxdown)
+
+        return [prob, sample]
 
     def _collectVHStatistics(self, prob_of_H, data):
         """Theano function for collecting V*H statistics."""
