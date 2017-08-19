@@ -3,10 +3,14 @@ python:
     - "2.7"
     #- "3.2" Sphinx issue on 3.2
     #- "3.3" Biopython requires at least 3.4
-    #- "3.4" import of package failed, why??
+    - "3.4"
+    - "3.5"
+    - "3.6"
     # PyPy versions
     #- "pypy"  # PyPy2 2.5.0
     #- "pypy3" # Pypy3 2.4.0
+env:
+    - THEANO_FLAGS='device=cpu, floatX=float32'
 
 before_install:
     - sudo apt-get update

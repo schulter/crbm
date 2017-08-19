@@ -1,1 +1,1 @@
-from tutorial import tutorial
+from .tutorial import tutorial

@@ -454,7 +454,7 @@ class CRBM:
     def _compileTheanoFunctions(self):
         """This methods compiles all theano functions."""
 
-        print "Start compiling Theano training function..."
+        print("Start compiling Theano training function...")
         D = T.tensor4('data')
         updates = self._updateWeightsOnMinibatch(D, self.cd_k)
         self.theano_trainingFct = theano.function(
@@ -512,7 +512,7 @@ class CRBM:
                 #self.bottomUpProbability( T.maximum(self.bottomUpActivity(D),
                 self._bottomUpProbability( self._bottomUpActivity(D) + 
                         self._bottomUpActivity(D, True)))
-        print "Compilation of Theano training function finished"
+        print("Compilation of Theano training function finished")
 
     def _evaluateData(self, data):
         """Evaluate performance on given numpy array.
@@ -596,14 +596,14 @@ class CRBM:
         # some debug printing
         numTrainingBatches = training_data.shape[0] / self.batchsize
         numTestBatches = test_data.shape[0] / self.batchsize
-        print "BatchSize: " + str(self.batchsize)
-        print "Num of iterations per epoch: " + str(numTrainingBatches)
+        print(("BatchSize: " + str(self.batchsize)))
+        print(("Num of iterations per epoch: " + str(numTrainingBatches)))
         start = time.time()
 
         # compile training function
 
         # now perform training
-        print "Start training the model..."
+        print("Start training the model...")
         starttime = time.time()
 
         for epoch in range(self.epochs):
@@ -621,15 +621,15 @@ class CRBM:
                 nb=nb+1
             [twn_,ic_,medic_]=self._evaluateParams()
             #for batchIdx in range(numTestBatches):
-            print("Epoch {:d}: ".format(epoch) + \
+            print(("Epoch {:d}: ".format(epoch) + \
                     "FE={:1.3f} ".format(meanfe/nb) + \
                     "NumH={:1.4f} ".format(meannmh/nb) + \
                     "WNorm={:2.2f} ".format(float(twn_)) + \
-                    "IC={:1.3f} medIC={:1.3f}".format(float(ic_), float(medic_)))
+                    "IC={:1.3f} medIC={:1.3f}".format(float(ic_), float(medic_))))
 
         # done with training
-        print "Training finished after: {:5.2f} seconds!".format(\
-                time.time()-starttime)
+        print(("Training finished after: {:5.2f} seconds!".format(\
+                time.time()-starttime)))
 
     def _meanFreeEnergy(self, D):
         """Theano function for computing the mean free energy."""

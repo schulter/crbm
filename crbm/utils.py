@@ -84,7 +84,7 @@ def createSeqLogo(pfm, filename, fformat = 'eps'):
     weblogoOptions = LogoOptions(color_scheme=classic)
     weblogoFormat = LogoFormat(weblogoData, weblogoOptions)
     content = formatters[fformat](weblogoData, weblogoFormat)
-    f = open(filename, "w")
+    f = open(filename, "wb")
     f.write(content)
     f.close()
 
@@ -122,7 +122,7 @@ def positionalDensityPlot(model, seqs, filename = None):
     for m_idx in range(mh.shape[0]):
         smh = np.convolve(mh[m_idx,:], 
                 scipy.stats.norm.pdf(np.linspace(-3,3,num=10)), mode='same')
-        plt.plot(range(mh.shape[1]), smh, color=colors[m_idx], 
+        plt.plot(list(range(mh.shape[1])), smh, color=colors[m_idx], 
                 label='Motif {:d}'.format(m_idx +1))
     plt.xlabel("Position")
     plt.ylabel("Average motif match probability")
@@ -251,7 +251,7 @@ def tsneScatterWithPies(model, seqs, tsne, lims = None, filename= None):
     fig = plt.figure(figsize = (6, 6))
     ax = fig.add_axes([.1,.1, .6,.75])
     #given a probability matrix (N x K x 1 x 200)
-    for idx, col in zip(range(probs.shape[1]), colors):
+    for idx, col in zip(list(range(probs.shape[1])), colors):
         
         markx = [0] + np.cos([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
         marky = [0] + np.sin([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
@@ -295,7 +295,7 @@ def violinPlotMotifMatches(model, data, filename = None):
         the figure will be dirctly disployed.
     """
 
-    seqs = np.concatenate(data.values(), axis=0)
+    seqs = np.concatenate(list(data.values()), axis=0)
     labels = []
     for k in data:
         labels += [k] * data[k].shape[0]

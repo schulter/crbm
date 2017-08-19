@@ -46,7 +46,7 @@ def readSeqsFromFasta(filename):
     for faseq in sio.parse(open(filename), 'fasta', IUPAC.unambiguous_dna):
         match = re.search(r'N', str(faseq.seq), re.I)
         if match:
-            print "skip sequence containing N"
+            print("skip sequence containing N")
             continue
         seqs.append(faseq)
     return seqs
@@ -86,7 +86,7 @@ def splitTrainingTest(filename, train_test_ratio, num_top_regions = None,\
     if randomize:
         idx_permut = list(np.random.permutation(len(seqs)))
     else:
-        idx_permut = range(len(seqs))
+        idx_permut = list(range(len(seqs)))
 
     itest = idx_permut[:int(len(seqs)*train_test_ratio)]
     itrain = idx_permut[int(len(seqs)*train_test_ratio):]
