@@ -14,8 +14,8 @@ release = "1.0.dev1"
 config = {
     'description': 'Convolutional restricted Boltzmann machine for learning DNA sequence features',
     'author': ['Roman Schulte-Sasse', 'Wolfgang Kopp'],
-    'url': 'https://github.molgen.mpg.de/wkopp/crbm',
-    'download_url': 'https://github.molgen.mpg.de/wkopp/crbm',
+    'url': 'https://github.com/wkopp/crbm',
+    'download_url': 'https://github.com/wkopp/crbm',
     'author_email': ['sasse@molgen.mpg.de','kopp@molgen.mpg.de'],
     'version': version,
     'install_requires': ['numpy','Biopython','pandas', 'sklearn','Theano',
