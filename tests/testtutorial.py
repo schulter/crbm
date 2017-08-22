@@ -2,7 +2,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 import os
-from crbmtutorial import tutorial
+from crbm.tutorial import tutorial
 
 def test_tutorial(tmpdir):
 

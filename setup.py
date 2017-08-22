@@ -7,7 +7,7 @@ except ImportError:
 
 #cmdclass = {'build_sphinx': BuildDoc}
 
-name = "cRBM"
+name = "crbm"
 version = "1.0"
 release = "1.0.dev1"
 
@@ -20,7 +20,7 @@ config = {
     'version': version,
     'install_requires': ['numpy','Biopython','pandas', 'sklearn','Theano',
         'joblib','matplotlib', 'weblogo', 'seaborn'],
-    'packages': ['crbm', 'crbmtutorial'],
+    'packages': ['crbm'],
     'tests_require': ['pytest'],
     'setup_requires': ['pytest-runner'],
     'package_data': {'crbm':['data/oct4.fa']},
