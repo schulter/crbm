@@ -5,8 +5,9 @@ System setup
 Requirements
 ============
 
-To run the ``crbm`` python package the following prerequisites
-are required on your system:
+The ``crbm`` package is compatible and was tested
+with py2.7, py3.4, py3.5 and py3.5.
+Prerequisites:
 
 * ``theano``
 * ``numpy``
