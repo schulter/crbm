@@ -9,7 +9,7 @@ except ImportError:
 
 name = "crbm"
 version = "1.0"
-release = "1.0.dev1"
+release = "1.0.dev2"
 
 config = {
     'description': 'Convolutional restricted Boltzmann machine for learning DNA sequence features',
