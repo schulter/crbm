@@ -101,8 +101,6 @@ def splitTrainingTest(filename, train_test_ratio, num_top_regions = None,\
 def seqToOneHot(seqs):
     """Converts a set of Biopython DNA sequences to *one-hot* encoding.
 
-    .. todo:: check if this is the case.
-
     Parameters
     -----------
     seqs :list

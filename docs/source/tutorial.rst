@@ -17,7 +17,7 @@ from embryonic stem cells (ESCs)
     import crbm
 
     # Obtain sample sequences in one-hot encoding
-    onhot = crbm.load_sample()
+    onehot = crbm.load_sample()
 
 The original DNA sequences first need to be converted to *one-hot* encoding
 
