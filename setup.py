@@ -8,8 +8,7 @@ except ImportError:
 #cmdclass = {'build_sphinx': BuildDoc}
 
 name = "crbm"
-version = "1.0"
-release = "1.0.dev2"
+exec(open('crbm/version.py').read())
 
 config = {
     'description': 'Convolutional restricted Boltzmann machine for learning DNA sequence features',
@@ -17,7 +16,7 @@ config = {
     'url': 'https://github.com/wkopp/crbm',
     'download_url': 'https://github.com/wkopp/crbm',
     'author_email': ['sasse@molgen.mpg.de','kopp@molgen.mpg.de'],
-    'version': version,
+    'version': __version__,
     'install_requires': ['numpy','Biopython','pandas', 'sklearn','Theano',
         'joblib','matplotlib', 'weblogo', 'seaborn'],
     'packages': ['crbm'],
