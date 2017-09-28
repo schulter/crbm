@@ -8,7 +8,7 @@ except ImportError:
 #cmdclass = {'build_sphinx': BuildDoc}
 
 name = "secomo"
-exec(open('crbm/version.py').read())
+exec(open('secomo/version.py').read())
 
 config = {
     'description': 'SECOMO: Using convolutional restricted Boltzmann machines to model DNA sequence features and contexts',
