@@ -15,4 +15,4 @@ on the revealed motifs.
 
 A comprehensive documatentation, including a tutorial
 on how to use the package can be found here:
-[cRBM Docs](https://crbm.readthedocs.io)
+[cRBM Docs](http://crbm.readthedocs.io/en/latest/?badge=latest)
