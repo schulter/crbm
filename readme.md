@@ -1,4 +1,5 @@
-# Convolutional restricted Boltzmann machine for learning DNA sequence features
+# SECOMO: A SEquence COntext MOdeler
+## Extract motifs and their context from DNA sequences.
 
 [![Build Status](https://travis-ci.org/schulter/crbm.svg?branch=master)](https://travis-ci.org/schulter/crbm)
 [![codecov](https://codecov.io/gh/schulter/crbm/branch/master/graph/badge.svg)](https://codecov.io/gh/schulter/crbm)
