@@ -1,4 +1,4 @@
-from crbm import CRBM, load_sample
+from secomo import CRBM, load_sample
 import pytest
 import numpy as np
 import theano
@@ -100,7 +100,7 @@ class TestCRBM(object):
     def test_training(self):
         """Test training.
 
-        There is nothing to validate numerically, 
+        There is nothing to validate numerically,
         just run to catch syntax errors
         """
         # doublestranded = False
@@ -108,7 +108,7 @@ class TestCRBM(object):
         data = self.data[:100]
 
         for ds in (True, False):
-            model = CRBM(num_motifs = 10, motif_length = 15, 
+            model = CRBM(num_motifs = 10, motif_length = 15,
                     doublestranded = ds, epochs = 1)
             model.fit(data)
             model.fit(data, data[:10])
@@ -121,7 +121,7 @@ class TestCRBM(object):
         mlen = 15
 
         for ds in (True, False):
-            model = CRBM(num_motifs = mnum, motif_length = mlen, 
+            model = CRBM(num_motifs = mnum, motif_length = mlen,
                     doublestranded = ds, epochs = 1)
 
             pred = model.motifHitProbs(data)
@@ -135,7 +135,7 @@ class TestCRBM(object):
         mlen = 15
 
         for ds in (True, False):
-            model = CRBM(num_motifs = mnum, motif_length = mlen, 
+            model = CRBM(num_motifs = mnum, motif_length = mlen,
                     doublestranded = ds, epochs = 1)
 
             pfms = model.getPFMs()
@@ -162,12 +162,12 @@ class TestCRBM(object):
         model = CRBM(num_motifs = nmot, motif_length = mlen)
         input = T.tensor4()
 
-        activ = theano.function([input], 
+        activ = theano.function([input],
                 model._bottomUpActivity(input, flip))
-        prob = theano.function([input], 
+        prob = theano.function([input],
                 model._bottomUpProbability(
                     model._bottomUpActivity(input, flip)))
-        hgivenv = theano.function([input], 
+        hgivenv = theano.function([input],
                 model._computeHgivenV(input, flip))
 
         if flip:
@@ -196,8 +196,8 @@ class TestCRBM(object):
         output, _ = hgivenv(data)
         np.testing.assert_allclose(output, sigmoid(output_control),
                 rtol=1e-5, atol=1e-5)
-        np.testing.assert_equal(output.shape, (data.shape[0], nmot, 
-            1, data.shape[3] - mlen +1)) 
+        np.testing.assert_equal(output.shape, (data.shape[0], nmot,
+            1, data.shape[3] - mlen +1))
 
     def controlTopDownActivity(self, w, c, data, datap = None):
         """Top down activity control implementation."""
@@ -280,7 +280,7 @@ class TestCRBM(object):
 
         # test correct normalization
         # each position sums to one
-        np.testing.assert_allclose(poutput.sum(), data.shape[0]*data.shape[3], 
+        np.testing.assert_allclose(poutput.sum(), data.shape[0]*data.shape[3],
                 rtol=1e-4, atol=1e-4)
         # test correct sampling: one 1 per position
         np.testing.assert_allclose(soutput.sum(), data.shape[0]*data.shape[3],
@@ -386,7 +386,7 @@ class TestCRBM(object):
         np.testing.assert_equal(op2.shape, (nseq, 1, 4, seqlen))
 
         # check if all activities are similar
-        np.testing.assert_allclose(oa, output_control, 
+        np.testing.assert_allclose(oa, output_control,
                 rtol=1e-5, atol=1e-5)
 
 
@@ -517,4 +517,3 @@ class TestCRBM(object):
 
         print(fe.shape)
         np.testing.assert_equal(fe.shape, (data.shape[0],))
-

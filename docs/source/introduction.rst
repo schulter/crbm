@@ -1,5 +1,5 @@
 ====================
-Introduction to cRBM
+Introduction to SECOMO: A SEquence COntext MOdeler
 ====================
 
 This package provides functionality to automatically
@@ -28,7 +28,7 @@ toy example of *Oct4* ChIP-seq peak regions obtained from embryonic stem cells.
 Finally, if this tool helps for your analysis, please cite the package::
 
     @Manual{,
-        title = {cRBM: A python package for automatically 
+        title = {SECOMO: A python package for automatically 
                 extracting DNA sequence features},
         author = {Roman Schulte-Sasse, Wolfgang Kopp},
         year = {2017},

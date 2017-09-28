@@ -2,7 +2,7 @@
 Acknowledgements
 ================
 
-This project was developed by **Roman Schulte-Sasse** (@schulter) as part of
+This project was developed by **Roman Schulte-Sasse** (`@schulter <https://github.com/schulter>`_) as part of
 his Master thesis with help and under the supervision of 
 **Wolfgang Kopp** (`@wkopp <https://wkopp.github.io>`_)
 and with co-supervision of **Prof. Dr. Annalisa Marsico** at the 

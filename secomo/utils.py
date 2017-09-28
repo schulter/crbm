@@ -32,7 +32,7 @@ def saveMotifs(model, path, name = "mot", fformat = 'jaspar'):
     fformat : str
         File format of the motifs. Either 'jaspar' or 'tab'. Default: 'jaspar'.
     """
-    
+
     pfms = model.getPFMs()
     alphabet = ['A','C','G','T']
     for i in range(len(pfms)):
@@ -120,9 +120,9 @@ def positionalDensityPlot(model, seqs, filename = None):
     ax = fig.add_axes([.1,.1, .6,.75])
     colors = cm.rainbow(np.linspace(0,1,mh.shape[0]))
     for m_idx in range(mh.shape[0]):
-        smh = np.convolve(mh[m_idx,:], 
+        smh = np.convolve(mh[m_idx,:],
                 scipy.stats.norm.pdf(np.linspace(-3,3,num=10)), mode='same')
-        plt.plot(list(range(mh.shape[1])), smh, color=colors[m_idx], 
+        plt.plot(list(range(mh.shape[1])), smh, color=colors[m_idx],
                 label='Motif {:d}'.format(m_idx +1))
     plt.xlabel("Position")
     plt.ylabel("Average motif match probability")
@@ -154,7 +154,7 @@ def runTSNE(model, seqs):
     hiddenprobs = model.motifHitProbs(seqs)
     hiddenprobs = hiddenprobs.max(axis=(2,3))
 
-    hreshaped = hiddenprobs.reshape((hiddenprobs.shape[0], 
+    hreshaped = hiddenprobs.reshape((hiddenprobs.shape[0],
         np.prod(hiddenprobs.shape[1:])))
     model = TSNE()
     return model.fit_transform(hreshaped)
@@ -178,13 +178,13 @@ def tsneScatter(data, lims = None, colors = None, filename = None, legend = True
         If None, a default colormap will be used.
 
     filename : str
-        Filename for storing the figure. Default: None, means 
+        Filename for storing the figure. Default: None, means
         the figure stored but directly displayed.
 
     legend : bool
         Include the legend into the figure. Default: True
     """
-        
+
 
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_axes([.1,.1, .6,.75])
@@ -193,7 +193,7 @@ def tsneScatter(data, lims = None, colors = None, filename = None, legend = True
         colors = cm.brg(np.linspace(0,1,len(data)))
 
     for name, color  in zip(data, colors):
-        plt.scatter(x=data[name][:,0], y=data[name][:,1], 
+        plt.scatter(x=data[name][:,0], y=data[name][:,1],
                 c=color, label = name, alpha=.3)
     if lims:
         plt.xlim(lims[0][0], lims[1][0])
@@ -252,14 +252,14 @@ def tsneScatterWithPies(model, seqs, tsne, lims = None, filename= None):
     ax = fig.add_axes([.1,.1, .6,.75])
     #given a probability matrix (N x K x 1 x 200)
     for idx, col in zip(list(range(probs.shape[1])), colors):
-        
+
         markx = [0] + np.cos([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
         marky = [0] + np.sin([idx*2*np.pi/probs.shape[1], 2*np.pi*(idx+1)/probs.shape[1]]).tolist()
 
         markxy = list(zip(markx, marky))
 
         #X, Y = tsne[:,0], tsne[:,1]
-        
+
         s =150*(pcurrent[:, idx]-pmedian[idx])/(pmax[idx]-pmedian[idx])
         s[s<=0]=0.
         plt.scatter(tsne[:,0], tsne[:,1], marker=(markxy, 0),
@@ -296,24 +296,26 @@ def violinPlotMotifMatches(model, data, filename = None):
     """
 
     seqs = np.concatenate(list(data.values()), axis=0)
+    # generate labels for the two sets
     labels = []
     for k in data:
         labels += [k] * data[k].shape[0]
 
+    # compute hidden probabilities and normalize them
     hiddenprobs = model.motifHitProbs(seqs)
     probs = hiddenprobs.mean(axis=(2,3))
-
     probs = probs / np.amax(probs,axis=0, keepdims=True)
 
-    fig = plt.figure(figsize = (8,5))
+    # put everything in a DF and reduce it to fit with violinplot
     df = pd.DataFrame(data=probs, columns = [ "Motif "+str(i +1) \
             for i in range(probs.shape[1])])
     df["TF"] = pd.DataFrame(data = pd.Series(labels, name="TF"))
+    dfm = pd.melt(df, id_vars = "TF")
 
-    dfm = pd.melt(df, value_vars = df.columns[:-1], id_vars = "TF")
+    # create figure with violinplot
+    fig = plt.figure(figsize = (8,5))
     g = sns.violinplot(x='variable', y='value', hue='TF', data=dfm,
             palette="Set2")
-
     g.set_xlabel("")
     g.set_ylabel("Normalized motif abundance")
     locs, labels = plt.xticks()
@@ -325,4 +327,3 @@ def violinPlotMotifMatches(model, data, filename = None):
         fig.savefig(filename, dpi=700)
     else:
         plt.show()
-

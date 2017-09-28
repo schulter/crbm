@@ -1,16 +1,16 @@
 ===
-API
+SECOMO API
 ===
 
     
         
-Convolutional restricted Boltzmann machine
+Convolutional restricted Boltzmann machine (cRBM)
 ==========================================
 
-:class:`CRBM` contains the main functionality of the package
-for training, evaluating and investigating the model.
+:class:`CRBM` contains the main functionality of SECOMO
+for training, evaluating and investigating models.
 
-.. currentmodule:: crbm
+.. currentmodule:: secomo
 
 .. autosummary:: 
 
@@ -22,7 +22,7 @@ for training, evaluating and investigating the model.
     CRBM.loadModel
 
 
-.. automodule:: crbm
+.. automodule:: secomo
 
 .. autoclass:: CRBM
     :members:
@@ -33,7 +33,7 @@ Sequence-related utilies
 Functions for loading DNA sequences in fasta format
 and for convert them to the required *one-hot* encoding.
 
-.. currentmodule:: crbm.sequences
+.. currentmodule:: secomo.sequences
 
 .. autosummary::
 
@@ -41,18 +41,18 @@ and for convert them to the required *one-hot* encoding.
     seqToOneHot
     splitTrainingTest
     
-.. automodule:: crbm.sequences
+.. automodule:: secomo.sequences
     :members: readSeqsFromFasta, seqToOneHot, splitTrainingTest
 
 Utils
 =======
 
-This part presents functions contained in :mod:`crbm.utils` that
-support investigating the results of the :class:`cRBM`,
-including by generating position frequency matrices, sequence logos
+This part presents functions contained in :mod:`secomo.utils` that
+help you investigate the results of a trained SECOMO model.
+It features generating position frequency matrices, sequence logos
 and clustering plots.
 
-.. currentmodule:: crbm.utils
+.. currentmodule:: secomo.utils
 
 .. autosummary::
 
@@ -65,7 +65,7 @@ and clustering plots.
     tsneScatterWithPies
     violinPlotMotifMatches
 
-.. automodule:: crbm.utils
+.. automodule:: secomo.utils
     :members: saveMotifs, positionalDensityPlot, runTSNE, tsneScatter,
             createSeqLogos, createSeqLogo,
             tsneScatterWithPies, violinPlotMotifMatches
@@ -77,7 +77,7 @@ The package contains a small sample dataset consisting
 of *Oct4* ChIP-seq sequences of embryonic stem cells from
 ENCODE [1]_.
 
-.. autofunction:: crbm.sequences.load_sample
+.. autofunction:: secomo.sequences.load_sample
 
 
 .. [1] ENCODE Project Consortium and others. (2012).

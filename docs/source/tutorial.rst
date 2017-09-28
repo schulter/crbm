@@ -3,12 +3,12 @@ Tutorial
 ========
 
 This section is intended to demonstrate the main functionality of
-the package on a small toy dataset.
+SECOMO on a small toy dataset.
 
 Loading sample dataset
 ----------------------
 
-Assuming you have successfully install the :mod:`crbm` package,
+Assuming you have successfully install the :mod:`secomo` package,
 you can load a sample dataset consisting of *Oct4* ChIP-seq peaks
 from embryonic stem cells (ESCs)
 
@@ -17,23 +17,23 @@ from embryonic stem cells (ESCs)
     import crbm
 
     # Obtain sample sequences in one-hot encoding
-    onehot = crbm.load_sample()
+    onehot = secomo.load_sample()
 
 The original DNA sequences first need to be converted to *one-hot* encoding
 
 .. note::
 
-    The sample sequences are contained in the :mod:`crbm` package in
+    The sample sequences are contained in the :mod:`secomo` package in
     fasta format. Generally, fasta files can be loaded and converted 
     to *one-hot* encoding according to
 
     .. code-block:: python
 
         # Convert to one-hot
-        seqs = crbm.readSeqsFromFasta("path/to/seq.fa")
-        onehot = crbm.seqToOneHot(seqs)
+        seqs = secomo.readSeqsFromFasta("path/to/seq.fa")
+        onehot = secomo.seqToOneHot(seqs)
 
-Train cRBM
+Train SECOMO's convolutional RBM model
 ----------
 
 Next, we instantiate a cRBM to learn 10 motifs
@@ -42,7 +42,7 @@ of length 15 bp and train it on the provided sequences
 .. code-block:: python
 
     # Obtain a cRBM object
-    model = crbm.CRBM(num_motifs = 10, motif_length = 15)
+    model = secomo.CRBM(num_motifs = 10, motif_length = 15)
 
     # Fit the model
     model.fit(onehot)
@@ -74,13 +74,14 @@ To this end, the following methods can be invoked
     model.saveModel('oct4_model_params.pkl')
 
     # Reinstantiate model
-    model = crbm.CRBM.loadModel('oct4_model_params.pkl')
+    model = secomo.CRBM.loadModel('oct4_model_params.pkl')
 
 Position frequency matrices
 ---------------------------
 
 A common way to investigate patterns in DNA sequences is
-given by *position frequency matrices* (PFMs).
+to model them as *position frequency matrices* (PFMs) which can be
+then nicely visualized.
 The model parameters (e.g. the weight matrices) learned by the
 cRBM can be converted to such PFMs,
 which can then be used for further downstream analysis.
@@ -93,7 +94,7 @@ For this purpose one can utilize
 
     # Store the PFMs (by default in 'jaspar' format)
     # in the folder './pfms/'
-    crbm.saveMotifs(model, path = './pfms/')
+    secomo.saveMotifs(model, path = './pfms/')
 
 PFMs are frequently visualized in terms of sequence logos
 which can be obtained by
@@ -101,14 +102,14 @@ which can be obtained by
 .. code-block:: python
 
     # Writes all logos in the logos/ directory
-    crbm.utils.createSeqLogos(model, path = "./logos/")
+    secomo.utils.createSeqLogos(model, path = "./logos/")
 
     # Alternatively, an individual sequence logo can be created:
     # Get first motif
     pfm = model.getPFMs()[0]
 
     # Create a corresponding sequence logo
-    crbm.utils.createSeqLogo(pfm, filename = "logo1.png", fformat = "png")
+    secomo.utils.createSeqLogo(pfm, filename = "logo1.png", fformat = "png")
 
 
 Motif matches
@@ -126,7 +127,7 @@ The per-position motif match probabilities can be obtained as follows
 
 Here, ``matches`` represents a 4D numpy array comprising the match
 probabilities with dimensions
-`Nseqs x num_motifs x 1 x Seqlengths - motif_length + 1`.
+`Nseqs x num_motifs x 1 x (Seqlengths - motif_length + 1)`.
 
 An average profile of match probabilities per-position
 can be illustrated using
@@ -135,27 +136,26 @@ can be illustrated using
 
     # Plot positional enrichment for all motifs in the given
     # test sequences
-    crbm.positionalDensityPlot(model, onehot[:100], filename = './densityplot.png')
+    secomo.positionalDensityPlot(model, onehot[:100], filename = './densityplot.png')
 
 
 Clustering analysis
 -------------------
 
-Finally, we shall demonstrate how to perform a clustering analysis
-of the sequences under study based on the cRBM motifs.
-To that end, we first run TSNE clustering using
+Finally, we shall demonstrate that the sequence activations of similar sequences tend to
+cluster together. In order to visualize the clusters, we run TSNE dimensionality reduction using
 
 .. code-block:: python
 
-    # Run t-SNE clustering
-    tsne = crbm.runTSNE(model, onehot)
+    # Run t-SNE dim reduction to 2D
+    tsne = secomo.runTSNE(model, onehot)
 
     # Visualize the results in a scatter plot
-    crbm.tsneScatter({'Oct4': tsne}, filename = './tsnescatter.png')
+    secomo.tsneScatter({'Oct4': tsne}, filename = './tsnescatter.png')
 
     # Visualize the results in the scatter plot
     # by augmenting with the respective motif abundances
-    crbm.tsneScatterWithPies(model, onehot, tsne, filename = "./tsnescatter_pies.png")
+    secomo.tsneScatterWithPies(model, onehot, tsne, filename = "./tsnescatter_pies.png")
 
 Motif enrichment across different sets of sequences
 ---------------------------------------------------
@@ -175,7 +175,7 @@ the function
     # Assemble multiple datasets as follows
     data = {'set1': onehot[:1500], 'set2': onehot[1500:]}
 
-    crbm.violinPlotMotifMatches(model, data, 
+    secomo.violinPlotMotifMatches(model, data, 
             filename = os.path.join(path, 'violinplot.png'))
 
     
@@ -183,4 +183,4 @@ Summary of the full analysis
 ----------------------------
 
 The full tutorial code can be found in the Github repository: 
-`crbm/tutorial.py <https://github.com/wkopp/crbm/blob/master/crbm/tutorial.py>`_
+`crbm/tutorial.py <https://github.com/schulter/crbm/blob/master/crbm/tutorial.py>`_

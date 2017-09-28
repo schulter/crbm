@@ -1,7 +1,7 @@
 import os
-from crbm.convRBM import *
-from crbm.sequences import *
-from crbm.utils import *
+from secomo.convRBM import *
+from secomo.sequences import *
+from secomo.utils import *
 
 def tutorial(path):
     # List of Biopython sequences
@@ -36,7 +36,7 @@ def tutorial(path):
     pfm = model.getPFMs()[0]
 
     # Create a corresponding sequence logo
-    createSeqLogo(pfm, filename = os.path.join(path, 'logo1.png'), 
+    createSeqLogo(pfm, filename = os.path.join(path, 'logo1.png'),
             fformat = "png")
 
     # Per-position motif match probabilities
@@ -45,24 +45,23 @@ def tutorial(path):
 
     # Plot positional enrichment for all motifs in the given
     # test sequences
-    positionalDensityPlot(model, onehot[:100], 
+    positionalDensityPlot(model, onehot[:100],
             filename = os.path.join(path, 'densityplot.png'))
 
     # Run t-SNE clustering
     tsne = runTSNE(model, onehot)
 
     # Visualize the results in a scatter plot
-    tsneScatter({'Oct4': tsne}, 
+    tsneScatter({'Oct4': tsne},
             filename = os.path.join(path, 'tsnescatter.png'))
 
     # Visualize the results in the scatter plot
     # by augmenting with the respective motif abundances
-    tsneScatterWithPies(model, onehot, tsne, 
+    tsneScatterWithPies(model, onehot, tsne,
             filename = os.path.join(path, 'tsnescatter_pies.png'))
 
     # Assemble multiple datasets as follows
     data = {'set1': onehot[:1500], 'set2': onehot[1500:]}
 
-    violinPlotMotifMatches(model, data, 
+    violinPlotMotifMatches(model, data,
             filename = os.path.join(path, 'violinplot.png'))
-

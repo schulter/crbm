@@ -2,7 +2,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 import os
-from crbm.tutorial import tutorial
+from secomo.tutorial import tutorial
 
 def test_tutorial(tmpdir):
 
@@ -21,7 +21,6 @@ def test_tutorial(tmpdir):
     assert 'tsnescatter.png' in outputs
     assert 'tsnescatter_pies.png' in outputs
     assert 'violinplot.png' in outputs
-    
+
     for subdir in ['pfms', 'logos']:
         assert len(os.listdir(os.path.join(path.strpath, subdir))) == 10
-

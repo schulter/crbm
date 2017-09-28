@@ -7,19 +7,19 @@ except ImportError:
 
 #cmdclass = {'build_sphinx': BuildDoc}
 
-name = "crbm"
+name = "secomo"
 exec(open('crbm/version.py').read())
 
 config = {
-    'description': 'Convolutional restricted Boltzmann machine for learning DNA sequence features',
+    'description': 'SECOMO: Using convolutional restricted Boltzmann machines to model DNA sequence features and contexts',
     'author': ['Roman Schulte-Sasse', 'Wolfgang Kopp'],
-    'url': 'https://github.com/wkopp/crbm',
-    'download_url': 'https://github.com/wkopp/crbm',
+    'url': 'https://github.com/schulter/crbm',
+    'download_url': 'https://github.com/schulter/crbm',
     'author_email': ['sasse@molgen.mpg.de','kopp@molgen.mpg.de'],
     'version': __version__,
-    'install_requires': ['numpy','Biopython','pandas', 'sklearn','Theano',
+    'install_requires': ['numpy', 'Biopython', 'pandas', 'sklearn','Theano',
         'joblib','matplotlib', 'weblogo', 'seaborn'],
-    'packages': ['crbm'],
+    'packages': ['secomo'],
     'tests_require': ['pytest'],
     'setup_requires': ['pytest-runner'],
     'package_data': {'crbm':['data/oct4.fa']},
@@ -33,4 +33,3 @@ config = {
 }
 
 setup(**config)
-
