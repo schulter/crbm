@@ -15,4 +15,6 @@ on the revealed motifs.
 
 A comprehensive documatentation, including a tutorial
 on how to use the package can be found here:
-[cRBM Docs](http://crbm.readthedocs.io/en/latest/?badge=latest)
+[SECOMO Docs](http://crbm.readthedocs.io/en/latest/?badge=latest)
+
+For more information on the method and analysis, please refer to our [preprint](https://www.biorxiv.org/content/early/2017/08/31/183095)
