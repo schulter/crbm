@@ -14,7 +14,7 @@ from embryonic stem cells (ESCs)
 
 .. code-block:: python
 
-    import crbm
+    import secomo
 
     # Obtain sample sequences in one-hot encoding
     onehot = secomo.load_sample()
