@@ -546,7 +546,7 @@ class CRBM:
         """
         return self.theano_getHitProbs(data)
 
-    def freeEnergy(self, data):
+    def freeEnergy(self, data, permotif=False):
         """Free energy determined on the given dataset.
 
         Parameters
@@ -554,11 +554,18 @@ class CRBM:
         data : numpy-array
             4D numpy array representing a DNA sequence in one-hot encoding.
             See :meth:`crbm.sequences.seqToOneHot`.
+        permotif : boolean
+            Indicates whether the free energy should be computed per motif.
+            Default: The free energy is computed per sequence, by summing over
+                the individual motif contributions.
 
         returns : numpy-array
             Free energy per sequence.
         """
-        return self.theano_freeEnergy(data)
+        if permotif:
+            return self.theano_fePerMotif(data)
+        else:
+            return self.theano_freeEnergy(data)
 
     def fit(self, training_data, test_data = None):
         """Fits the cRBM to the provided training sequences.
