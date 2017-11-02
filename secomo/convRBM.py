@@ -12,6 +12,7 @@ import numpy as np
 import time
 import joblib
 import pprint
+import math
 
 """
 This is the actual implementation of our convolutional RBM.
@@ -55,22 +56,27 @@ class CRBM:
     momentum : float
         Momentum term (Default: 0.95).
     pooling : int
-        Pooling factor (not relevant for 
+        Pooling factor (not relevant for
         cRBM, but for future work) (Default: 1).
     cd_k : int
-        Number of Gibbs sampling iterations in 
+        Number of Gibbs sampling iterations in
         each persistent contrastive divergence step (Default: 5).
     rho : float
         Target frequency of motif occurrences (Default: 0.01).
     lambda_rate : float
         Sparsity enforcement aka penality term (Default: 0.1).
+    cd_kmer_scale_length : int
+        Scale the motif hits by the kmer word frequency in the whole training
+        data to force the model to focus on abundant motifs. If 0 (default),
+        don't scale.
     """
 
     def __init__(self, num_motifs, motif_length, epochs = 100, input_dims=4, \
             doublestranded = True, batchsize = 20, learning_rate = 0.1, \
-            momentum = 0.95, pooling = 1, cd_k = 5, 
-            rho = 0.01, lambda_rate = 0.1):
-     
+            momentum = 0.95, pooling = 1, cd_k = 5,
+            rho = 0.01, lambda_rate = 0.1, cd_kmer_scale_length=0,
+            weight_kmer_scaling=0.2):
+
         # sanity checks:
         if num_motifs <= 0:
             raise Exception("Number of motifs must be positive.")
@@ -87,10 +93,10 @@ class CRBM:
             warnings.warn("input_dims != 4 was not comprehensively \
                 tested yet. Be careful when interpreting the results.",
                 UserWarning)
-        
+
         if batchsize <= 0:
             raise Exception("batchsize must be positive.")
-        
+
         if learning_rate <= 0.0:
             raise Exception("learning_rate must be positive.")
 
@@ -109,6 +115,9 @@ class CRBM:
         if lambda_rate < 0.:
             raise Exception("lambda_rate must be non-negative.")
 
+        if cd_kmer_scale_length < 0 or cd_kmer_scale_length > motif_length:
+            raise Exception("Kmer length must be between 0 (no scaling) and motif length")
+
         # parameters for the motifs
         self.num_motifs = num_motifs
         self.motif_length = motif_length
@@ -125,6 +134,9 @@ class CRBM:
         self.spmethod = 'entropy'
         self._gradientSparsityConstraint = \
             self._gradientSparsityConstraintEntropy
+        self.cd_kmer_scale_length = cd_kmer_scale_length
+        self.weight_kmer_scaling = weight_kmer_scaling
+        #self.global_kmer_freqs = T.constant(np.zeros(self.input_dims**self.cd_kmer_scale_length), dtype='float32')
 
         x = np.random.randn(self.num_motifs,
                                 1,
@@ -133,14 +145,14 @@ class CRBM:
                                 ).astype(theano.config.floatX)
 
         self.motifs = theano.shared(value=x, name='W', borrow=True)
-        
+
         # determine the parameter rho for the model if not given
         if not rho:
             rho = 1. / (self.num_motifs * self.motif_length)
             if self.doublestranded:
               rho=rho/2.
             self.rho = rho
-        
+
         # cRBM parameters (2*x to respect both strands of the DNA)
         b = np.zeros((1, self.num_motifs)).astype(theano.config.floatX)
 
@@ -156,7 +168,7 @@ class CRBM:
         # infrastructural parameters
         self.theano_rng = RS(seed=int(time.time()))
         self.rng_data_permut = theano.tensor.shared_randomstreams.RandomStreams()
-        
+
         self.motif_velocity = theano.shared(value=np.zeros(self.motifs.get_value().shape).astype(theano.config.floatX),
                                             name='velocity_of_W',
                                             borrow=True)
@@ -166,7 +178,7 @@ class CRBM:
         self.c_velocity = theano.shared(value=np.zeros(c.shape).astype(theano.config.floatX),
                                         name='velocity_of_c',
                                         borrow=True)
-        
+
         val = np.zeros((self.batchsize, self.num_motifs, 1, 200)).astype(theano.config.floatX)
         self.fantasy_h = theano.shared(value=val, name='fantasy_h', borrow=True)
         if self.doublestranded:
@@ -174,7 +186,7 @@ class CRBM:
                     np.zeros((self.batchsize, self.num_motifs, 1, 200)).astype(theano.config.floatX), \
                     name='fantasy_h_prime', borrow=True)
 
-        self._compileTheanoFunctions()
+        #self._compileTheanoFunctions()
 
     def saveModel(self, filename):
         """Save the model parameters and additional hyper-parameters.
@@ -188,18 +200,18 @@ class CRBM:
         numpyParams = (self.motifs.get_value(),
                 self.bias.get_value(),
                 self.c.get_value())
-        
+
         hyperparams = ( self.num_motifs,
-        self.motif_length, 
+        self.motif_length,
         self.input_dims,
         self.doublestranded,
-        self.batchsize, 
-        self.learning_rate, 
-        self.momentum, 
-        self.rho, 
-        self.lambda_rate, 
-        self.pooling, 
-        self.cd_k, 
+        self.batchsize,
+        self.learning_rate,
+        self.momentum,
+        self.rho,
+        self.lambda_rate,
+        self.pooling,
+        self.cd_k,
         self.epochs, self.spmethod)
 
         pickleObject = (numpyParams, hyperparams)
@@ -218,11 +230,11 @@ class CRBM:
         """
 
         numpyParams, hyperparams =joblib.load(filename)
-        
+
         (num_motifs, motif_length, input_dims, \
             doublestranded, batchsize, learning_rate, \
             momentum, rho, lambda_rate,
-            pooling, cd_k, 
+            pooling, cd_k,
             epochs, spmethod) = hyperparams
 
         obj = cls(num_motifs, motif_length, epochs, input_dims, \
@@ -236,10 +248,68 @@ class CRBM:
         obj.c.set_value(c)
         return obj
 
+    def compute_global_kmer_frequencies(self, data):
+        """Compute the frequencies of k-mers in the data.
+
+        The function calculates the frequencies of each of the kmers in the
+        data. We can use the resulting vector as a lookup table for an
+        adapted contrastive divergence.
+        """
+        nseq = data.shape[0]
+        seqlen = data.shape[3]
+        k = self.cd_kmer_scale_length
+        x = np.power(self.input_dims, range(k))[::-1]
+        a = np.arange(0, self.input_dims)
+        countmatrix = np.zeros((nseq, self.input_dims**k), dtype=int)
+        for i in range(nseq):
+            for j in range(seqlen-k+1):
+                position = np.dot(np.dot(a,data[i,0,:,j:(j+k)]),x).astype('int')
+                countmatrix[i, position] = countmatrix[i, position] + 1
+        self.global_kmer_freqs = T.constant(countmatrix.mean(axis=0), dtype='float32')
+        self._compileTheanoFunctions() # have to recompile because vector changed
+
+    def _scale_by_kmer_frequency(self, data, flip_motif):
+        """Compute the scaling by kmer frequencies for some data.
+
+        This function computes the scaling factors for each of the kernel
+        positions in the data based on a predefined global lookup table in
+        which the frequencies of kmers are stored.
+
+        Parameters:
+        ----------
+        data : T.tensor4
+            Minibatch tensor for which the scaling is to be computed
+
+        Returns:
+        -------
+        The scaling factors for each of the kernel positions of shape
+        [batchsize, 1, 1, N-(M-k)-k+1] = [batchsize, 1, 1, N-M+1]
+        """
+        # calculate offset for the sequence and clip data
+        k = self.cd_kmer_scale_length
+        offset = int(math.floor((self.motif_length - k)/2.))
+        D = data[:, :, :, offset:-offset] # clip the remainder
+        # compute kmer word indices using convolutions
+        onehot_nums = D.argmax(axis=2, keepdims=True)
+        kernel = np.array([[[[self.input_dims**i for i in range(k)][::-1]]]], dtype='float32')
+        kernel_tensor = T.constant(kernel, name='kmer_conv_kernel') # define a constant kernel here
+        onehot_nums = T.cast(onehot_nums, 'float32')
+        lookup_idx = conv(onehot_nums, kernel_tensor,
+                          filter_flip=False, border_mode='valid',
+                          input_shape=(self.batchsize, 1, self.input_dims, None),
+                          filter_shape=(1, 1, 1, self.cd_kmer_scale_length)
+                          )
+        lookup_idx = T.cast(lookup_idx, 'int32') # cast to int for lookup
+        # look up the indices in the global lookup table
+        scalers = self.global_kmer_freqs[lookup_idx]
+        return scalers
+
     def _bottomUpActivity(self, data, flip_motif=False):
         """Theano function for computing bottom up activity."""
 
         out = conv(data, self.motifs, filter_flip=flip_motif)
+        if self.cd_kmer_scale_length > 0:
+            out = out + self.weight_kmer_scaling * self._scale_by_kmer_frequency(data, flip_motif)
         out = out + self.bias.dimshuffle('x', 1, 0, 'x')
         return out
 
@@ -256,7 +326,7 @@ class CRBM:
                 activities.shape[1], activities.shape[2], \
                 activities.shape[3]))
         return x
-        
+
     def _bottomUpSample(self,probs):
         """Theano function for bottom up sampling."""
 
@@ -279,7 +349,7 @@ class CRBM:
         """Theano function for top down activity."""
         W = self.motifs.dimshuffle(1, 0, 2, 3)
         C = conv(h, W, border_mode='full', filter_flip=True)
-        
+
         out = T.sum(C, axis=1, keepdims=True)  # sum over all K
 
         if hprime:
@@ -303,11 +373,11 @@ class CRBM:
         """Theano function for top down sample."""
         if softmaxdown:
             pV_ = probability.dimshuffle(0, 1, 3, 2).reshape( \
-                (probability.shape[0]*probability.shape[3], 
+                (probability.shape[0]*probability.shape[3],
                     probability.shape[2]))
             V_ = self.theano_rng.multinomial(n=1, pvals=pV_).astype(
                     theano.config.floatX)
-            V = V_.reshape((probability.shape[0], 1, probability.shape[3], 
+            V = V_.reshape((probability.shape[0], 1, probability.shape[3],
                 probability.shape[2])).dimshuffle(0, 1, 3, 2)
 
         else:
@@ -370,7 +440,7 @@ class CRBM:
 
         average_V = self._collectVStatistics(data)
         return average_VH, average_H, average_V
-    
+
     def _updateWeightsOnMinibatch(self, D, gibbs_chain_length):
         """Theano function that defines an SGD update step with momentum."""
 
@@ -407,12 +477,12 @@ class CRBM:
                         self._computeHgivenV(V_given_model,  True)
             else:
                 prob_of_H_given_model_prime, H_given_model_prime = None, None
-        
+
         # compute the model gradients
         G_motif_model, G_bias_model, G_c_model = \
                   self._collectUpdateStatistics(prob_of_H_given_model, \
                   prob_of_H_given_model_prime, V_given_model)
-        
+
         mu = self.momentum
         alpha = self.learning_rate
         sp = self.lambda_rate
@@ -429,7 +499,7 @@ class CRBM:
         new_bias = self.bias + vbias
         new_c = self.c + vc
 
-        
+
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
                    (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
                    (self.fantasy_h, H_given_model)]
@@ -468,14 +538,14 @@ class CRBM:
         mfe_ = self._meanFreeEnergy(D)
         #compute number  of motif hits
         [_, H] = self._computeHgivenV(D)
-        
+
         #H = self.bottomUpProbability(self.bottomUpActivity(D))
         nmh_=T.mean(H)  # mean over samples (K x 1 x N_h)
 
 
         #compute norm of the motif parameters
         twn_=T.sqrt(T.mean(self.motifs**2))
-        
+
         #compute information content
         pwm = self._softmax(self.motifs)
         entropy = -pwm * T.log2(pwm)
@@ -503,20 +573,20 @@ class CRBM:
         fed=self._freeEnergyPerMotif(D)
         self.theano_fePerMotif=theano.function( [D],fed,name='fe_per_motif')
 
-        
+
         if self.doublestranded:
             self.theano_getHitProbs = theano.function([D], \
                 self._bottomUpProbability(self._bottomUpActivity(D)))
         else:
             self.theano_getHitProbs = theano.function([D], \
                 #self.bottomUpProbability( T.maximum(self.bottomUpActivity(D),
-                self._bottomUpProbability( self._bottomUpActivity(D) + 
+                self._bottomUpProbability( self._bottomUpActivity(D) +
                         self._bottomUpActivity(D, True)))
         print("Compilation of Theano training function finished")
 
     def _evaluateData(self, data):
         """Evaluate performance on given numpy array.
-        
+
         This is used to monitor training progress.
         """
         return self.theano_evaluateData(data)
@@ -607,7 +677,9 @@ class CRBM:
         print(("Num of iterations per epoch: " + str(numTrainingBatches)))
         start = time.time()
 
-        # compile training function
+        # if kmer frequencies are used to scale the inputs, compute the LUT
+        if self.cd_kmer_scale_length > 0:
+            self.compute_global_kmer_frequencies(training_data)
 
         # now perform training
         print("Start training the model...")
@@ -633,7 +705,7 @@ class CRBM:
                     "NumH={:1.4f} ".format(meannmh/nb) + \
                     "WNorm={:2.2f} ".format(float(twn_)) + \
                     "IC={:1.3f} medIC={:1.3f}".format(float(ic_), float(medic_))))
-
+            self.weight_kmer_scaling *= .5 # decay for importance of kmer scaling
         # done with training
         print(("Training finished after: {:5.2f} seconds!".format(\
                 time.time()-starttime)))
@@ -641,7 +713,7 @@ class CRBM:
     def _meanFreeEnergy(self, D):
         """Theano function for computing the mean free energy."""
         return T.sum(self._freeEnergyForData(D))/D.shape[0]
-        
+
     def getPFMs(self):
         """Returns the weight matrices converted to *position frequency matrices*.
 
@@ -670,14 +742,14 @@ class CRBM:
         free_energy = -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
         if self.doublestranded:
             x=self._bottomUpActivity(D,True)
-  
+
             x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
             free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(1, 2, 3))
-        
+
         cMod = self.c
         cMod = cMod.dimshuffle('x', 0, 1, 'x')  # make it 4D and broadcastable there
         free_energy = free_energy - T.sum(D * cMod, axis=(1, 2, 3))
-        
+
         return free_energy/D.shape[3]
 
     def _freeEnergyPerMotif(self, D):
@@ -694,11 +766,11 @@ class CRBM:
             x=self._bottomUpActivity(D,True)
             x = x.reshape((x.shape[0], x.shape[1], x.shape[2], x.shape[3]//pool, pool))
             free_energy = free_energy -T.sum(T.log(1.+T.sum(T.exp(x), axis=4)), axis=(2, 3))
-        
+
         cMod = self.c
         cMod = cMod.dimshuffle('x', 0, 1, 'x')  # make it 4D and broadcastable there
         free_energy = free_energy - T.sum(D * cMod, axis=(1, 2, 3)).dimshuffle(0, 'x')
-        
+
         return free_energy
 
     def _softmax(self, x):
@@ -729,4 +801,3 @@ class CRBM:
 
         return [ [i,i+nbatchsize] if i+nbatchsize<=totalsize \
                     else [i,totalsize] for i in range(totalsize)[0::nbatchsize] ]
-    
