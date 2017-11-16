@@ -11,7 +11,8 @@ name = "secomo"
 exec(open('secomo/version.py').read())
 
 config = {
-    'description': 'SECOMO: Using convolutional restricted Boltzmann machines to model DNA sequence features and contexts',
+    'description': 'SECOMO: Using convolutional restricted Boltzmann machines \
+    to model DNA sequence features and contexts',
     'author': ['Roman Schulte-Sasse', 'Wolfgang Kopp'],
     'url': 'https://github.com/schulter/crbm',
     'download_url': 'https://github.com/schulter/crbm',
@@ -22,7 +23,7 @@ config = {
     'packages': ['secomo'],
     'tests_require': ['pytest'],
     'setup_requires': ['pytest-runner'],
-    'package_data': {'crbm':['data/oct4.fa']},
+    'package_data': {'secomo':['data/oct4.fa']},
     'zip_safe': False,
     #'command_options': {
         #'build_sphinx': {
