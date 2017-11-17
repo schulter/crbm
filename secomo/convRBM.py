@@ -9,10 +9,8 @@ import scipy
 
 # numpy and python classics
 import numpy as np
-import time
+import time, math
 import joblib
-import pprint
-import math
 
 """
 This is the actual implementation of our convolutional RBM.
@@ -42,6 +40,10 @@ class CRBM:
     motif_length : int
         Motif length.
 
+    data:
+        Use some data to initialize the filters or to scale the gradients.
+        This can be any one-hot encoded sequence data but typically
+        the training data is used.
     epochs : int
         Number of epochs to train (Default: 100).
     input_dims :int
@@ -69,13 +71,19 @@ class CRBM:
         Scale the motif hits by the kmer word frequency in the whole training
         data to force the model to focus on abundant motifs. If 0 (default),
         don't scale.
+    kmer_length : int
+        When `data` is given, initialize the motifs with most frequent kmers
+        of length `kmer_length`.
+        When `weight_kmer_scaling` > 0, scale the gradients according to the
+        most frequent kmers of that length.
     """
 
-    def __init__(self, num_motifs, motif_length, epochs = 100, input_dims=4, \
-            doublestranded = True, batchsize = 20, learning_rate = 0.1, \
-            momentum = 0.95, pooling = 1, cd_k = 5,
-            rho = 0.01, lambda_rate = 0.1, cd_kmer_scale_length=0,
-            weight_kmer_scaling=0.2):
+    def __init__(self, num_motifs, motif_length, data=None, epochs=100,
+                 input_dims=4, doublestranded=True, batchsize=20,
+                 learning_rate=0.1, momentum=0.95, pooling=1, cd_k=5,
+                 rho=0.01, lambda_rate=0.1, weight_kmer_scaling=0.2,
+                 kmer_length=5
+                 ):
 
         # sanity checks:
         if num_motifs <= 0:
@@ -115,7 +123,7 @@ class CRBM:
         if lambda_rate < 0.:
             raise Exception("lambda_rate must be non-negative.")
 
-        if cd_kmer_scale_length < 0 or cd_kmer_scale_length > motif_length:
+        if kmer_length < 0 or kmer_length > motif_length:
             raise Exception("Kmer length must be between 0 (no scaling) and motif length")
 
         # parameters for the motifs
@@ -132,19 +140,22 @@ class CRBM:
         self.cd_k = cd_k
         self.epochs = epochs
         self.spmethod = 'entropy'
+        self.kmer_length = kmer_length
         self._gradientSparsityConstraint = \
             self._gradientSparsityConstraintEntropy
-        self.cd_kmer_scale_length = cd_kmer_scale_length
         self.weight_kmer_scaling = weight_kmer_scaling
         #self.global_kmer_freqs = T.constant(np.zeros(self.input_dims**self.cd_kmer_scale_length), dtype='float32')
 
-        x = np.random.randn(self.num_motifs,
-                                1,
-                                self.input_dims,
-                                self.motif_length
-                                ).astype(theano.config.floatX)
+        if data is None: # initialize filters randomly
+            x = np.random.randn(self.num_motifs,
+                                    1,
+                                    self.input_dims,
+                                    self.motif_length
+                                    ).astype(theano.config.floatX)
 
-        self.motifs = theano.shared(value=x, name='W', borrow=True)
+            self.motifs = theano.shared(value=x, name='W', borrow=True)
+        else: # initialize filters from data
+            self.initialize_filters(data)
 
         # determine the parameter rho for the model if not given
         if not rho:
@@ -188,6 +199,51 @@ class CRBM:
 
         #self._compileTheanoFunctions()
 
+    def compute_global_kmer_frequencies(self, data):
+        """Compute the frequencies of k-mers in the data.
+        The function calculates the frequencies of each of the kmers in the
+        data. We can use the resulting vector as a lookup table for an
+        adapted contrastive divergence.
+        """
+        nseq = data.shape[0]
+        seqlen = data.shape[3]
+        k = self.kmer_init_length
+        x = np.power(self.input_dims, range(k))[::-1]
+        a = np.arange(0, self.input_dims)
+        #D = data.mean(axis=(0, 1)) # mean over sequences
+        frequencies = np.zeros((nseq, self.input_dims**k))
+        kmers = np.zeros((self.input_dims**k, self.input_dims, k))
+        for seq in range(nseq):
+            for j in range(seqlen-k+1):
+                position = np.dot(np.dot(a, data[seq, 0, :, j:(j+k)]), x).astype('int')
+                kmers[position, :, :] = data[seq, 0, :, j:(j+k)]
+                frequencies[seq, position] = frequencies[seq, position] + 1
+        return kmers, frequencies.mean(axis=0) # mean over seqs
+
+
+    def initialize_filters(self, data):
+        # get kmer one-hot-matrices and their frequencies
+        kmers, frequencies = self.compute_global_kmer_frequencies(data)
+        # construct random filters first
+        x = np.random.randn(self.num_motifs,
+                            1,
+                            self.input_dims,
+                            self.motif_length
+                            ).astype(theano.config.floatX)
+        # implant motif
+        middle = (self.motif_length - self.kmer_init_length)/2.
+        offset_min = int(math.floor(middle))
+        offset_max = int(math.ceil(middle))
+        noise = 0 # TODO: Make that a hyper param or remove
+        most_frequent_motifs = np.argsort(frequencies)[::-1][:self.num_motifs]
+
+        softmax = lambda x: np.exp(x) / np.exp(x).sum(axis=0, keepdims=True)
+        for motif in range(self.num_motifs):
+            to_implant = softmax(kmers[most_frequent_motifs[motif], :, :])
+            print (to_implant)
+            x[motif, :, :, offset_min:-offset_max] = to_implant + noise
+        self.motifs = theano.shared(value=x, name='W', borrow=True)
+
     def saveModel(self, filename):
         """Save the model parameters and additional hyper-parameters.
 
@@ -201,18 +257,22 @@ class CRBM:
                 self.bias.get_value(),
                 self.c.get_value())
 
-        hyperparams = ( self.num_motifs,
-        self.motif_length,
-        self.input_dims,
-        self.doublestranded,
-        self.batchsize,
-        self.learning_rate,
-        self.momentum,
-        self.rho,
-        self.lambda_rate,
-        self.pooling,
-        self.cd_k,
-        self.epochs, self.spmethod)
+        hyperparams = (self.num_motifs,
+                       self.motif_length,
+                       self.input_dims,
+                       self.doublestranded,
+                       self.batchsize,
+                       self.learning_rate,
+                       self.momentum,
+                       self.rho,
+                       self.lambda_rate,
+                       self.pooling,
+                       self.cd_k,
+                       self.epochs,
+                       self.spmethod,
+                       self.kmer_length,
+                       self.weight_kmer_scaling
+                       )
 
         pickleObject = (numpyParams, hyperparams)
         joblib.dump(pickleObject, filename, protocol= 2)
@@ -235,12 +295,15 @@ class CRBM:
             doublestranded, batchsize, learning_rate, \
             momentum, rho, lambda_rate,
             pooling, cd_k,
-            epochs, spmethod) = hyperparams
+            epochs, spmethod, kmer_length, weight_kmer_scaling) = hyperparams
 
-        obj = cls(num_motifs, motif_length, epochs, input_dims, \
-                doublestranded, batchsize, learning_rate, \
-                momentum, pooling, cd_k,
-                rho, lambda_rate)
+        obj = cls(num_motifs, motif_length, epochs=epochs,
+                  input_dims=input_dims,doublestranded=doublestranded,
+                  batchsize=batchsize, learning_rate=learning_rate,
+                  momentum=momentum, pooling=pooling, cd_k=cd_k, rho=rho,
+                  lambda_rate=lambda_rate, kmer_length=kmer_length,
+                  weight_kmer_scaling=weight_kmer_scaling
+                  )
 
         motifs, bias, c = numpyParams
         obj.motifs.set_value(motifs)
@@ -248,7 +311,7 @@ class CRBM:
         obj.c.set_value(c)
         return obj
 
-    def compute_global_kmer_frequencies(self, data):
+    def compute_frequency_lut(self, data):
         """Compute the frequencies of k-mers in the data.
 
         The function calculates the frequencies of each of the kmers in the
@@ -257,7 +320,7 @@ class CRBM:
         """
         nseq = data.shape[0]
         seqlen = data.shape[3]
-        k = self.cd_kmer_scale_length
+        k = self.kmer_length
         x = np.power(self.input_dims, range(k))[::-1]
         a = np.arange(0, self.input_dims)
         countmatrix = np.zeros((nseq, self.input_dims**k), dtype=int)
@@ -286,7 +349,7 @@ class CRBM:
         [batchsize, 1, 1, N-(M-k)-k+1] = [batchsize, 1, 1, N-M+1]
         """
         # calculate offset for the sequence and clip data
-        k = self.cd_kmer_scale_length
+        k = self.kmer_length
         offset = int(math.floor((self.motif_length - k)/2.))
         D = data[:, :, :, offset:-offset] # clip the remainder
         # compute kmer word indices using convolutions
@@ -297,7 +360,7 @@ class CRBM:
         lookup_idx = conv(onehot_nums, kernel_tensor,
                           filter_flip=False, border_mode='valid',
                           input_shape=(self.batchsize, 1, self.input_dims, None),
-                          filter_shape=(1, 1, 1, self.cd_kmer_scale_length)
+                          filter_shape=(1, 1, 1, self.kmer_length)
                           )
         lookup_idx = T.cast(lookup_idx, 'int32') # cast to int for lookup
         # look up the indices in the global lookup table
@@ -308,7 +371,7 @@ class CRBM:
         """Theano function for computing bottom up activity."""
 
         out = conv(data, self.motifs, filter_flip=flip_motif)
-        if self.cd_kmer_scale_length > 0:
+        if self.kmer_length > 0:
             out = out + self.weight_kmer_scaling * self._scale_by_kmer_frequency(data, flip_motif)
         out = out + self.bias.dimshuffle('x', 1, 0, 'x')
         return out
@@ -489,9 +552,9 @@ class CRBM:
         reg_motif, reg_bias = self._gradientSparsityConstraint(D)
 
         vmotifs = mu * self.motif_velocity + \
-                alpha * (G_motif_data - G_motif_model-sp*reg_motif)
+                alpha * (G_motif_data - G_motif_model - sp*reg_motif)
         vbias = mu * self.bias_velocity + \
-                alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+                alpha * (G_bias_data - G_bias_model - sp*reg_bias)
         vc = mu*self.c_velocity + \
                 alpha * (G_c_data - G_c_model)
 
@@ -554,6 +617,7 @@ class CRBM:
             T.mean(entropy)  # log is possible information due to length of sequence
         medic_= T.log2(self.motifs.shape[2]) - \
             T.mean(T.sort(entropy, axis=2)[:, :, entropy.shape[2] // 2])
+        
         self.theano_evaluateData = theano.function(
               [D],
               [mfe_, nmh_],
@@ -670,16 +734,12 @@ class CRBM:
         else:
             test_data = training_data
 
-        # some debug printing
-        numTrainingBatches = training_data.shape[0] / self.batchsize
-        numTestBatches = test_data.shape[0] / self.batchsize
         print(("BatchSize: " + str(self.batchsize)))
-        print(("Num of iterations per epoch: " + str(numTrainingBatches)))
         start = time.time()
 
         # if kmer frequencies are used to scale the inputs, compute the LUT
-        if self.cd_kmer_scale_length > 0:
-            self.compute_global_kmer_frequencies(training_data)
+        if self.kmer_length > 0:
+            self.compute_frequency_lut(training_data)
 
         # now perform training
         print("Start training the model...")
@@ -699,7 +759,6 @@ class CRBM:
                 meannmh=meannmh+nmh_
                 nb=nb+1
             [twn_,ic_,medic_]=self._evaluateParams()
-            #for batchIdx in range(numTestBatches):
             print(("Epoch {:d}: ".format(epoch) + \
                     "FE={:1.3f} ".format(meanfe/nb) + \
                     "NumH={:1.4f} ".format(meannmh/nb) + \
