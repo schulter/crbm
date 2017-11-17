@@ -76,7 +76,7 @@ class CRBM:
     def __init__(self, num_motifs, motif_length, data=None, epochs=100,
                  input_dims=4, doublestranded=True, batchsize=20,
                  learning_rate=0.1, momentum=0.95, pooling=1, cd_k=5,
-                 rho=0.01, lambda_rate=0.1, kmer_init_length=5):
+                 rho=0.003, lambda_rate=1., kmer_init_length=5):
 
         # sanity checks:
         if num_motifs <= 0:
@@ -283,10 +283,12 @@ class CRBM:
             pooling, cd_k,
             epochs, spmethod, kmer_init_length) = hyperparams
 
-        obj = cls(num_motifs, motif_length, epochs, input_dims, \
-                doublestranded, batchsize, learning_rate, \
-                momentum, pooling, cd_k,
-                rho, lambda_rate, kmer_init_length)
+        obj = cls(num_motifs, motif_length, epochs=epochs,
+                  input_dims=input_dims,doublestranded=doublestranded,
+                  batchsize=batchsize, learning_rate=learning_rate,
+                  momentum=momentum, pooling=pooling, cd_k=cd_k, rho=rho,
+                  lambda_rate=lambda_rate, kmer_init_length=kmer_init_length
+                  )
 
         motifs, bias, c = numpyParams
         obj.motifs.set_value(motifs)
@@ -477,9 +479,9 @@ class CRBM:
         reg_motif, reg_bias = self._gradientSparsityConstraint(D)
 
         vmotifs = mu * self.motif_velocity + \
-                alpha * (G_motif_data - G_motif_model-sp*reg_motif)
+                alpha * (G_motif_data - G_motif_model - sp*reg_motif)
         vbias = mu * self.bias_velocity + \
-                alpha * (G_bias_data - G_bias_model-sp*reg_bias)
+                alpha * (G_bias_data - G_bias_model - sp*reg_bias)
         vc = mu*self.c_velocity + \
                 alpha * (G_c_data - G_c_model)
 
@@ -542,6 +544,7 @@ class CRBM:
             T.mean(entropy)  # log is possible information due to length of sequence
         medic_= T.log2(self.motifs.shape[2]) - \
             T.mean(T.sort(entropy, axis=2)[:, :, entropy.shape[2] // 2])
+        
         self.theano_evaluateData = theano.function(
               [D],
               [mfe_, nmh_],
@@ -658,11 +661,7 @@ class CRBM:
         else:
             test_data = training_data
 
-        # some debug printing
-        numTrainingBatches = training_data.shape[0] / self.batchsize
-        numTestBatches = test_data.shape[0] / self.batchsize
         print(("BatchSize: " + str(self.batchsize)))
-        print(("Num of iterations per epoch: " + str(numTrainingBatches)))
         start = time.time()
 
         # compile training function
@@ -685,7 +684,6 @@ class CRBM:
                 meannmh=meannmh+nmh_
                 nb=nb+1
             [twn_,ic_,medic_]=self._evaluateParams()
-            #for batchIdx in range(numTestBatches):
             print(("Epoch {:d}: ".format(epoch) + \
                     "FE={:1.3f} ".format(meanfe/nb) + \
                     "NumH={:1.4f} ".format(meannmh/nb) + \
