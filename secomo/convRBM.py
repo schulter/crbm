@@ -76,7 +76,7 @@ class CRBM:
     def __init__(self, num_motifs, motif_length, data=None, epochs=100,
                  input_dims=4, doublestranded=True, batchsize=20,
                  learning_rate=0.1, momentum=0.95, pooling=1, cd_k=5,
-                 rho=0.003, lambda_rate=1., kmer_init_length=5):
+                 rho=0.1, lambda_rate=1., kmer_init_length=5):
 
         # sanity checks:
         if num_motifs <= 0:
@@ -431,11 +431,22 @@ class CRBM:
         average_V = self._collectVStatistics(data)
         return average_VH, average_H, average_V
 
-    def _updateWeightsOnMinibatch(self, D, gibbs_chain_length):
-        """Theano function that defines an SGD update step with momentum."""
+    def _gradientSparsityConstraintEntropy(self, data):
+        """Theano function that defines the entropy-based sparsity constraint."""
+        # get expected[H|V]
+        [prob_of_H, _] = self._computeHgivenV(data)
+        q = self.rho
+        p = T.mean(prob_of_H, axis=(0, 2, 3))
 
+        gradKernels = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
+                             self.motifs)
+        gradBias = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
+                          self.bias)
+        return gradKernels, gradBias
+
+    def _getGradient(self, D, gibbs_chain_length):
         # calculate the data gradient for weights (motifs), bias and c
-        [prob_of_H_given_data,H_given_data] = self._computeHgivenV(D)
+        [prob_of_H_given_data, H_given_data] = self._computeHgivenV(D)
 
         if self.doublestranded:
             [prob_of_H_given_data_prime,H_given_data_prime] = \
@@ -473,43 +484,42 @@ class CRBM:
                   self._collectUpdateStatistics(prob_of_H_given_model, \
                   prob_of_H_given_model_prime, V_given_model)
 
+
+        # overall gradient
+        G_motifs = G_motif_data - G_motif_model
+        G_bias = G_bias_data - G_bias_model
+        G_c = G_c_data - G_c_model
+        
+        return G_motifs, G_bias, G_c, H_given_model, H_given_model_prime
+
+    def _updateWeightsOnMinibatch(self, D, gibbs_chain_length):
+        """Theano function that defines an SGD update step with momentum."""
+
+        G_motifs, G_bias, G_c, fantasy_H, fantasy_H_prime = self._getGradient(D, gibbs_chain_length)
+
         mu = self.momentum
         alpha = self.learning_rate
         sp = self.lambda_rate
         reg_motif, reg_bias = self._gradientSparsityConstraint(D)
 
         vmotifs = mu * self.motif_velocity + \
-                alpha * (G_motif_data - G_motif_model - sp*reg_motif)
+                alpha * (G_motifs - sp*reg_motif)
         vbias = mu * self.bias_velocity + \
-                alpha * (G_bias_data - G_bias_model - sp*reg_bias)
+                alpha * (G_bias - sp*reg_bias)
         vc = mu*self.c_velocity + \
-                alpha * (G_c_data - G_c_model)
+                alpha * G_c
 
         new_motifs = self.motifs + vmotifs
         new_bias = self.bias + vbias
         new_c = self.c + vc
 
-
         updates = [(self.motifs, new_motifs), (self.bias, new_bias), (self.c, new_c),
                    (self.motif_velocity, vmotifs), (self.bias_velocity, vbias), (self.c_velocity, vc),
-                   (self.fantasy_h, H_given_model)]
+                   (self.fantasy_h, fantasy_H)]
         if self.doublestranded:
-            updates.append((self.fantasy_h_prime, H_given_model_prime))
+            updates.append((self.fantasy_h_prime, fantasy_H_prime))
 
         return updates
-
-    def _gradientSparsityConstraintEntropy(self, data):
-        """Theano function that defines the entropy-based sparsity constraint."""
-        # get expected[H|V]
-        [prob_of_H, _] = self._computeHgivenV(data)
-        q = self.rho
-        p = T.mean(prob_of_H, axis=(0, 2, 3))
-
-        gradKernels = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
-                             self.motifs)
-        gradBias = - T.grad(T.mean(q*T.log(p) + (1-q)*T.log(1-p)),
-                          self.bias)
-        return gradKernels, gradBias
 
     def _compileTheanoFunctions(self):
         """This methods compiles all theano functions."""
@@ -544,10 +554,14 @@ class CRBM:
             T.mean(entropy)  # log is possible information due to length of sequence
         medic_= T.log2(self.motifs.shape[2]) - \
             T.mean(T.sort(entropy, axis=2)[:, :, entropy.shape[2] // 2])
-        
+
+        sp = self.lambda_rate
+        reg_motif, reg_bias = self._gradientSparsityConstraint(D)
+        G_motif, G_bias, G_c, _, _ = self._getGradient(D, self.cd_k)
+
         self.theano_evaluateData = theano.function(
               [D],
-              [mfe_, nmh_],
+              [mfe_, nmh_, (sp*reg_motif).sum(), (sp*reg_bias).sum(), G_motif.sum(), G_bias.sum(), G_c.sum()],
               name='evaluationData'
         )
 
@@ -676,19 +690,35 @@ class CRBM:
                 self._trainingFct(training_data[start:end,:,:,:])
             meanfe=0.0
             meannmh=0.0
-            nb=0
+            nb=0.
+            mean_regm = 0.0
+            mean_regb = 0.0
+            mean_gradm = 0.0
+            mean_gradb = 0.0
+            mean_gradc = 0.0
             for [start,end] in self._iterateBatchIndices(\
                             test_data.shape[0],self.batchsize):
-                [mfe_,nmh_]=self._evaluateData(test_data[start:end,:,:,:])
+                [mfe_,nmh_, regm, regb, gradm, gradb, gradc]=self._evaluateData(test_data[start:end,:,:,:])
                 meanfe=meanfe+mfe_
                 meannmh=meannmh+nmh_
+                mean_regm += regm
+                mean_regb += regb
+                mean_gradm += gradm
+                mean_gradb += gradb
+                mean_gradc += gradc
                 nb=nb+1
             [twn_,ic_,medic_]=self._evaluateParams()
-            print(("Epoch {:d}: ".format(epoch) + \
+            print("Epoch {:d}: ".format(epoch) + \
                     "FE={:1.3f} ".format(meanfe/nb) + \
                     "NumH={:1.4f} ".format(meannmh/nb) + \
                     "WNorm={:2.2f} ".format(float(twn_)) + \
-                    "IC={:1.3f} medIC={:1.3f}".format(float(ic_), float(medic_))))
+                    "IC={:1.3f} medIC={:1.3f} ".format(float(ic_), float(medic_)) + \
+                    "RegMot={:1.3f} ".format(mean_regm/nb) +\
+                    "RegBias={:1.3f} ".format(mean_regb/nb) + \
+                    "GradMot={:1.3f} ".format(mean_gradm/nb) + \
+                    "GradBias={:1.3f} ".format(mean_gradb/nb) + \
+                    "GradC={:1.3f}".format(mean_gradc/nb)
+                    )
 
         # done with training
         print(("Training finished after: {:5.2f} seconds!".format(\
@@ -778,6 +808,7 @@ class CRBM:
         st += "pooling: {:d}".format(self.pooling)
         st += "cd_k: {:d}".format(self.cd_k)
         st += "epochs: {:d}".format(self.epochs)
+        st += "kmer_init_length: {:d}".format(self.kmer_init_length)
         return st
 
     def _iterateBatchIndices(self, totalsize,nbatchsize):
